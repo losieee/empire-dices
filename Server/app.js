@@ -1,12 +1,27 @@
-const pool = require('./pool');
+require("dotenv").config();
+const express = require("express");
+const cors = require("cors");
+const pool = require("./pool");
 
-async function testDB() {
-  try {
-    const [rows] = await pool.query("SELECT 1 + 1 AS result");
-    console.log("DB 연결 성공! 결과:", rows);
-  } catch (err) {
-    console.error("DB 연결 실패:", err);
-  }
-}
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-testDB();
+app.use(cors());
+app.use(express.json());
+
+app.get("/ping", (req, res) => {
+    res.json({ message: "pong" });
+});
+
+app.get("/db-test", async (req, res) => {
+    try {
+        const [rows] = await pool.query("SELECT 1");
+        res.json({ message: "DB OK", result: rows });
+    } catch (err) {
+        res.json({ message: "DB FAIL", error: err.message });
+    }
+});
+
+app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+});
