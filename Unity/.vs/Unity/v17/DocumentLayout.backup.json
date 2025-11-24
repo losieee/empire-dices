@@ -1,0 +1,54 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Fork\\empire-dices\\Unity\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{CD8C9303-404B-FB8D-6B9B-21988D5CAC0A}|Assembly-CSharp.csproj|c:\\fork\\empire-dices\\unity\\assets\\scripts\\basicmain.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{CD8C9303-404B-FB8D-6B9B-21988D5CAC0A}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\basicmain.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{CD8C9303-404B-FB8D-6B9B-21988D5CAC0A}|Assembly-CSharp.csproj|C:\\Fork\\empire-dices\\Unity\\assets\\scripts\\basicprotocols.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{CD8C9303-404B-FB8D-6B9B-21988D5CAC0A}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\basicprotocols.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 0,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "basicMain.cs",
+              "DocumentMoniker": "C:\\Fork\\empire-dices\\Unity\\Assets\\Scripts\\basicMain.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\basicMain.cs",
+              "ToolTip": "C:\\Fork\\empire-dices\\Unity\\Assets\\Scripts\\basicMain.cs",
+              "RelativeToolTip": "Assets\\Scripts\\basicMain.cs",
+              "ViewState": "AgIAAAgAAAAAAAAAAAAAwAwAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-11-24T11:58:05.608Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "basicProtocols.cs",
+              "DocumentMoniker": "C:\\Fork\\empire-dices\\Unity\\Assets\\Scripts\\basicProtocols.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\basicProtocols.cs",
+              "ToolTip": "C:\\Fork\\empire-dices\\Unity\\Assets\\Scripts\\basicProtocols.cs",
+              "RelativeToolTip": "Assets\\Scripts\\basicProtocols.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAUAAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-11-24T11:57:03.951Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
