@@ -1,27 +1,16 @@
-require("dotenv").config();
-const express = require("express");
-const cors = require("cors");
-const pool = require("./pool");
-
+const express = require('express');
 const app = express();
-const PORT = process.env.PORT || 3000;
+const cors = require('cors');
+require('dotenv').config();
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json());   
 
-app.get("/ping", (req, res) => {
-    res.json({ message: "pong" });
-});
+const authRoutes = require('./routes/auth');
 
-app.get("/db-test", async (req, res) => {
-    try {
-        const [rows] = await pool.query("SELECT 1");
-        res.json({ message: "DB OK", result: rows });
-    } catch (err) {
-        res.json({ message: "DB FAIL", error: err.message });
-    }
-});
+app.use('/auth', authRoutes);
 
-app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+
+app.listen(3000, () => {
+    console.log('서버 실행 중: http://localhost:3000');
 });
