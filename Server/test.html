@@ -2,29 +2,87 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Socket.io Test Page</title>
-
+    <title>Empire Dice Socket Room Test</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 </head>
-<body>
-    <h1>Socket.io Test Page</h1>
 
-    <script>
-        const socket = io("http://localhost:3000");
+<body style="background:black; color:#00FF00; font-size:18px;">
 
-        socket.on("connect", () => {
-            console.log("연결 성공!", socket.id);
+<h1>Empire Dice Socket Room Test</h1>
 
-            socket.emit("hello", "안녕 서버!");
-        });
+<input id="tokenInput" placeholder="JWT Token" style="width:360px;">
+<button id="connectBtn">소켓 연결</button>
+<br><br>
 
-        socket.on("helloResponse", (msg) => {
-            console.log("서버 응답:", msg);
-        });
+<input id="roomInput" placeholder="방 번호 입력" style="width:120px;">
+<button id="createBtn">방 생성</button>
+<button id="joinBtn">방 입장</button>
+<br><br>
 
-        socket.on("connect_error", (err) => {
-            console.log("연결 실패:", err.message);
-        });
-    </script>
+<button id="diceBtn">주사위 굴리기</button>
+
+<pre id="logBox" style="width:100%; height:300px; background:#111; color:#00FF00; padding:10px;"></pre>
+
+<script>
+let socket = null;
+let currentRoom = null;
+
+function log(msg) {
+    document.getElementById("logBox").innerHTML += msg + "\n";
+}
+
+document.getElementById("connectBtn").onclick = () => {
+    const token = document.getElementById("tokenInput").value;
+
+    socket = io("http://localhost:3000", {
+        extraHeaders: {
+            Authorization: `Bearer ${token}`
+        }
+    });
+
+    socket.on("connect", () => {
+        log("socket connected id: " + socket.id);
+    });
+
+    socket.on("roomCreated", (roomId) => {
+        currentRoom = roomId;
+        log("방 생성 완료: " + roomId);
+        document.getElementById("roomInput").value = roomId;
+    });
+
+    socket.on("players", (players) => {
+        log("players: " + JSON.stringify(players));
+    });
+
+    socket.on("gameStart", () => {
+        log("game start");
+    });
+
+    socket.on("dice", (value) => {
+        log("dice: " + value);
+    });
+
+    socket.on("stateUpdate", (state) => {
+        log("state: " + JSON.stringify(state));
+    });
+};
+
+document.getElementById("createBtn").onclick = () => {
+    log("방 생성 요청");
+    socket.emit("createRoom");
+};
+
+document.getElementById("joinBtn").onclick = () => {
+    const roomId = document.getElementById("roomInput").value;
+    currentRoom = roomId;
+    log("방 입장 요청: " + roomId);
+    socket.emit("joinRoom", { sessionId: roomId });
+};
+
+document.getElementById("diceBtn").onclick = () => {
+    socket.emit("rollDice", { sessionId: currentRoom });
+};
+</script>
+
 </body>
 </html>
