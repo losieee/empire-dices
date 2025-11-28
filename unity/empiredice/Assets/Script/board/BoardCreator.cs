@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using System.Collections.Generic;
+using UnityEngine;
 
 public class BoardCreator : MonoBehaviour
 {
@@ -9,10 +10,41 @@ public class BoardCreator : MonoBehaviour
     public int rows = 6;
     public float spacing = 12f;
 
+    List<TileData> tileDataList;
+
     void Start()
     {
+        GenerateDummyData();
         GenerateBoard();
     }
+
+    void GenerateDummyData()
+    {
+        tileDataList = new List<TileData>()
+    {
+        new TileData(){ tileType="start" },                                     // bottom-left
+        new TileData(){ tileType="territory", grade="약소국", flagCode="KP" },
+        new TileData(){ tileType="territory", grade="약소국", flagCode="MN" },
+        new TileData(){ tileType="weapon" },                           // bottom weapon
+        new TileData(){ tileType="territory", grade="강대국", flagCode="US" },
+        new TileData(){ tileType="island" },                           // right bottom
+        new TileData(){ tileType="territory", grade="약소국", flagCode="SO" },
+        new TileData(){ tileType="territory", grade="약소국", flagCode="IQ" },
+        new TileData(){ tileType="weapon" },                           // right weapon
+        new TileData(){ tileType="territory", grade="강대국", flagCode="CH" },
+        new TileData(){ tileType="silence" },                          // right top
+        new TileData(){ tileType="territory", grade="약소국", flagCode="IR" },
+        new TileData(){ tileType="territory", grade="약소국", flagCode="CU" },
+        new TileData(){ tileType="weapon" },                           // top weapon
+        new TileData(){ tileType="territory", grade="강대국", flagCode="RU" },
+        new TileData(){ tileType="steal" },                            // left top
+        new TileData(){ tileType="territory", grade="약소국", flagCode="MV" },
+        new TileData(){ tileType="territory", grade="약소국", flagCode="AF" },
+        new TileData(){ tileType="weapon" },
+        new TileData(){ tileType="territory", grade="강대국", flagCode="KR" }
+    };
+    }
+
 
     void GenerateBoard()
     {
@@ -28,23 +60,39 @@ public class BoardCreator : MonoBehaviour
         float startX = -(totalWidth / 2f) + cellSizeX / 2f;
         float startY = (totalHeight / 2f) - cellSizeY / 2f;
 
-        for (int r = 0; r < rows; r++)
+        List<Vector2> positions = new List<Vector2>();
+
+        // bottom row (left to right)
+        for (int c = 0; c < columns; c++)
+            positions.Add(new Vector2(startX + c * (cellSizeX + spacing), startY - (rows - 1) * (cellSizeY + spacing)));
+
+        // right column (bottom to top)
+        for (int r = rows - 2; r > 0; r--)
+            positions.Add(new Vector2(startX + (columns - 1) * (cellSizeX + spacing), startY - r * (cellSizeY + spacing)));
+
+        // top row (right to left)
+        for (int c = columns - 1; c >= 0; c--)
+            positions.Add(new Vector2(startX + c * (cellSizeX + spacing), startY));
+
+        // left column (top to bottom)
+        for (int r = 1; r < rows - 1; r++)
+            positions.Add(new Vector2(startX, startY - r * (cellSizeY + spacing)));
+
+        // instantiate tiles
+        for (int i = 0; i < positions.Count; i++)
         {
-            for (int c = 0; c < columns; c++)
-            {
-                if (r == 0 || r == rows - 1 || c == 0 || c == columns - 1)
-                {
-                    GameObject tile = Instantiate(tilePrefab, boardParent, false);
-                    RectTransform rt = tile.GetComponent<RectTransform>();
+            GameObject tile = Instantiate(tilePrefab, boardParent, false);
+            RectTransform rt = tile.GetComponent<RectTransform>();
 
-                    rt.sizeDelta = new Vector2(cellSizeX, cellSizeY);
+            rt.sizeDelta = new Vector2(cellSizeX, cellSizeY);
+            rt.anchoredPosition = positions[i];
 
-                    float x = startX + c * (cellSizeX + spacing);
-                    float y = startY - r * (cellSizeY + spacing);
-
-                    rt.anchoredPosition = new Vector2(x, y);
-                }
-            }
+            tile.GetComponent<TileController>().SetupTile(tileDataList[i]);
         }
     }
+
+
 }
+
+
+
