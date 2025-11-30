@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-const pool = require("../pool");
+const pool = require("../pool");   
 const { httpAuth } = require("../middlewares/authMiddleware");
 
 router.post("/register", async (req, res) => {
@@ -22,8 +22,6 @@ router.post("/register", async (req, res) => {
 
 router.post("/login", async (req, res) => {
     try {
-        console.log("LOGIN BODY:", req.body);
-
         const { username, password } = req.body;
 
         const [rows] = await pool.query(
@@ -31,21 +29,14 @@ router.post("/login", async (req, res) => {
             [username]
         );
 
-        console.log("DB rows:", rows);
-
         if (rows.length === 0) {
-            console.log("NO USER FOUND");
             return res.status(400).json({ error: "유저 없음" });
         }
 
         const user = rows[0];
-        console.log("USER ROW:", user);
-
         const match = await bcrypt.compare(password, user.password_hash);
-        console.log("PASSWORD MATCH:", match);
 
         if (!match) {
-            console.log("WRONG PASSWORD");
             return res.status(400).json({ error: "비밀번호 불일치" });
         }
 
@@ -55,16 +46,12 @@ router.post("/login", async (req, res) => {
             { expiresIn: "1h" }
         );
 
-        console.log("TOKEN:", token);
-
         return res.json({ token });
 
     } catch (err) {
-        console.error("LOGIN ERROR:", err);
         return res.status(500).json({ error: "서버 오류" });
     }
 });
-
 
 router.get("/profile", httpAuth, (req, res) => {
     res.json({ message: "인증 성공", user: req.user });

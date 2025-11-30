@@ -1,88 +1,121 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Empire Dice Socket Room Test</title>
+    <title>Empire Dice Test Page</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 </head>
+<body>
+<h1>Empire Dice Test Page</h1>
 
-<body style="background:black; color:#00FF00; font-size:18px;">
-
-<h1>Empire Dice Socket Room Test</h1>
-
-<input id="tokenInput" placeholder="JWT Token" style="width:360px;">
-<button id="connectBtn">소켓 연결</button>
+<input id="token" placeholder="JWT Token" style="width:350px;">
+<button id="connect">소켓 연결</button>
 <br><br>
 
-<input id="roomInput" placeholder="방 번호 입력" style="width:120px;">
-<button id="createBtn">방 생성</button>
-<button id="joinBtn">방 입장</button>
+<button id="createRoom">방 생성</button>
+<input id="sessionId" placeholder="Session ID 입력" style="width:120px;">
+<button id="joinRoom">방 입장</button>
 <br><br>
 
-<button id="diceBtn">주사위 굴리기</button>
+<button id="rollDice" disabled>주사위 굴리기</button>
 
-<pre id="logBox" style="width:100%; height:300px; background:#111; color:#00FF00; padding:10px;"></pre>
+<h3>현재 턴: <span id="turnDisplay">없음</span></h3>
+<h3>플레이어 상태</h3>
+<pre id="states" style="background:#eef;padding:10px"></pre>
+
+<h3>로그</h3>
+<pre id="log" style="width:100%;height:300px;background:#eee;padding:10px;overflow-y:scroll;"></pre>
 
 <script>
 let socket = null;
 let currentRoom = null;
+let myUserId = null;
 
 function log(msg) {
-    document.getElementById("logBox").innerHTML += msg + "\n";
+    const box = document.getElementById("log");
+    box.innerHTML += msg + "\n";
+    box.scrollTop = box.scrollHeight;
 }
 
-document.getElementById("connectBtn").onclick = () => {
-    const token = document.getElementById("tokenInput").value;
+document.getElementById("connect").onclick = () => {
+    const token = document.getElementById("token").value;
+
+    try {
+        myUserId = JSON.parse(atob(token.split(".")[1])).user_id;
+    } catch (e) {
+        return log("JWT Token을 먼저 입력하세요");
+    }
 
     socket = io("http://localhost:3000", {
-        extraHeaders: {
-            Authorization: `Bearer ${token}`
-        }
+        auth: { token }
     });
 
-    socket.on("connect", () => {
-        log("socket connected id: " + socket.id);
+    socket.on("connect", () => log("접속: " + socket.id));
+
+    socket.on("roomCreated", (id) => {
+        currentRoom = id;
+        document.getElementById("sessionId").value = id;
+        log("방 생성 완료: " + id);
     });
 
-    socket.on("roomCreated", (roomId) => {
-        currentRoom = roomId;
-        log("방 생성 완료: " + roomId);
-        document.getElementById("roomInput").value = roomId;
+    socket.on("joinedRoom", (id) => {
+        currentRoom = id;
+        log("방 입장 완료: " + id);
     });
 
-    socket.on("players", (players) => {
-        log("players: " + JSON.stringify(players));
+    socket.on("players", (data) => {
+        log("players: " + JSON.stringify(data));
     });
 
     socket.on("gameStart", () => {
-        log("game start");
+        log("게임 시작!");
     });
 
-    socket.on("dice", (value) => {
-        log("dice: " + value);
+    socket.on("stateUpdate", (data) => {
+        document.getElementById("states").innerText = JSON.stringify(data, null, 2);
     });
 
-    socket.on("stateUpdate", (state) => {
-        log("state: " + JSON.stringify(state));
+    socket.on("turnChange", (nextTurnId) => {
+        document.getElementById("turnDisplay").innerText = nextTurnId;
+
+        if (nextTurnId === myUserId) {
+            document.getElementById("rollDice").disabled = false;
+            log(`내 턴입니다! (user_id=${myUserId})`);
+        } else {
+            document.getElementById("rollDice").disabled = true;
+        }
+
+        log("턴 변경: " + nextTurnId);
+    });
+
+    socket.on("dice", (v) => {
+        log("dice : " + v);
+    });
+
+    socket.on("notYourTurn", () => {
+        log("내 턴 아님");
+    });
+
+    socket.on("tileEvent", (tile) => {
+        log(`타일 도착 -> type=${tile.tile_type}, value=${tile.value}`);
     });
 };
 
-document.getElementById("createBtn").onclick = () => {
-    log("방 생성 요청");
+document.getElementById("createRoom").onclick = () => {
     socket.emit("createRoom");
+    log("createRoom 요청");
 };
 
-document.getElementById("joinBtn").onclick = () => {
-    const roomId = document.getElementById("roomInput").value;
-    currentRoom = roomId;
-    log("방 입장 요청: " + roomId);
-    socket.emit("joinRoom", { sessionId: roomId });
+document.getElementById("joinRoom").onclick = () => {
+    const sessionId = document.getElementById("sessionId").value;
+    socket.emit("joinRoom", { sessionId });
+    log("joinRoom 요청: " + sessionId);
 };
 
-document.getElementById("diceBtn").onclick = () => {
+document.getElementById("rollDice").onclick = () => {
     socket.emit("rollDice", { sessionId: currentRoom });
+    log("rollDice 요청");
 };
 </script>
-
 </body>
 </html>
