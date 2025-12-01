@@ -9,6 +9,7 @@ public class BoardCreator : MonoBehaviour
     public int columns = 6;
     public int rows = 6;
     public float spacing = 12f;
+    public TileManager tileManager;
 
     List<TileData> tileDataList;
 
@@ -47,6 +48,8 @@ public class BoardCreator : MonoBehaviour
 
     void GenerateBoard()
     {
+        tileManager.tiles.Clear();   // remove old
+
         float boardWidth = boardParent.rect.width;
         float boardHeight = boardParent.rect.height;
 
@@ -89,7 +92,7 @@ public class BoardCreator : MonoBehaviour
             var controller = tile.GetComponent<TileController>();
             controller.SetupTile(tileDataList[i]);
 
-            // Special Korean tile names
+            
             switch (i)
             {
                 case 0:
@@ -108,6 +111,8 @@ public class BoardCreator : MonoBehaviour
                     controller.SetSpecialText("");
                     break;
             }
+
+            tileManager.tiles.Add(tile.transform); 
         }
     }
 }
