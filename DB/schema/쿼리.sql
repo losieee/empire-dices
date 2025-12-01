@@ -1,3 +1,10 @@
+CREATE TABLE country (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    country_name VARCHAR(50) NOT NULL,
+    country_grade VARCHAR(10) NOT NULL,
+    country_flag_image VARCHAR(100) NOT NULL
+);
+
 INSERT INTO country (country_name, country_grade, country_flag_image) VALUES
 ('미국', '강', 'US.png'),
 ('중국', '강', 'CN.png'),
