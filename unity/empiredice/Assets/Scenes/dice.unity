@@ -548,7 +548,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 45151485cb5a2734a930393283cae262, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  tilePrefab: {fileID: 1887210708217114241, guid: 931c1a5e23026d746b0c94cf0d7ae9bd, type: 3}
+  tilePrefab: {fileID: 7940380450473904894, guid: b38fc1f2eaf7a4149a8f3fae8b2da9a5, type: 3}
   boardParent: {fileID: 1211957869}
   columns: 6
   rows: 6

@@ -21,30 +21,29 @@ public class BoardCreator : MonoBehaviour
     void GenerateDummyData()
     {
         tileDataList = new List<TileData>()
-    {
-        new TileData(){ tileType="start" },                                     // bottom-left
-        new TileData(){ tileType="territory", grade="약소국", flagCode="KP" },
-        new TileData(){ tileType="territory", grade="약소국", flagCode="MN" },
-        new TileData(){ tileType="weapon" },                           // bottom weapon
-        new TileData(){ tileType="territory", grade="강대국", flagCode="US" },
-        new TileData(){ tileType="island" },                           // right bottom
-        new TileData(){ tileType="territory", grade="약소국", flagCode="SO" },
-        new TileData(){ tileType="territory", grade="약소국", flagCode="IQ" },
-        new TileData(){ tileType="weapon" },                           // right weapon
-        new TileData(){ tileType="territory", grade="강대국", flagCode="CH" },
-        new TileData(){ tileType="silence" },                          // right top
-        new TileData(){ tileType="territory", grade="약소국", flagCode="IR" },
-        new TileData(){ tileType="territory", grade="약소국", flagCode="CU" },
-        new TileData(){ tileType="weapon" },                           // top weapon
-        new TileData(){ tileType="territory", grade="강대국", flagCode="RU" },
-        new TileData(){ tileType="steal" },                            // left top
-        new TileData(){ tileType="territory", grade="약소국", flagCode="MV" },
-        new TileData(){ tileType="territory", grade="약소국", flagCode="AF" },
-        new TileData(){ tileType="weapon" },
-        new TileData(){ tileType="territory", grade="강대국", flagCode="KR" }
-    };
+        {
+            new TileData(){ tileType="start" },                                     // 0 bottom-left
+            new TileData(){ tileType="territory", grade="약소국", flagCode="KP" },
+            new TileData(){ tileType="territory", grade="약소국", flagCode="MN" },
+            new TileData(){ tileType="weapon" },                                    // 3 bottom
+            new TileData(){ tileType="territory", grade="강대국", flagCode="US" },
+            new TileData(){ tileType="island" },                                    // 5 right bottom
+            new TileData(){ tileType="territory", grade="약소국", flagCode="SO" },
+            new TileData(){ tileType="territory", grade="약소국", flagCode="IQ" },
+            new TileData(){ tileType="weapon" },                                    // 8 right weapon
+            new TileData(){ tileType="territory", grade="강대국", flagCode="CH" },
+            new TileData(){ tileType="silent" },                                    // 10 right top
+            new TileData(){ tileType="territory", grade="약소국", flagCode="IR" },
+            new TileData(){ tileType="territory", grade="약소국", flagCode="CU" },
+            new TileData(){ tileType="weapon" },                                    // 13 top
+            new TileData(){ tileType="territory", grade="강대국", flagCode="RU" },
+            new TileData(){ tileType="steal" },                                     // 15 left top
+            new TileData(){ tileType="territory", grade="약소국", flagCode="MV" },
+            new TileData(){ tileType="territory", grade="약소국", flagCode="AF" },
+            new TileData(){ tileType="weapon" },                                    // 18 left
+            new TileData(){ tileType="territory", grade="강대국", flagCode="KR" }   // 19 bottom
+        };
     }
-
 
     void GenerateBoard()
     {
@@ -62,23 +61,23 @@ public class BoardCreator : MonoBehaviour
 
         List<Vector2> positions = new List<Vector2>();
 
-        // bottom row (left to right)
+        // bottom row
         for (int c = 0; c < columns; c++)
             positions.Add(new Vector2(startX + c * (cellSizeX + spacing), startY - (rows - 1) * (cellSizeY + spacing)));
 
-        // right column (bottom to top)
+        // right column
         for (int r = rows - 2; r > 0; r--)
             positions.Add(new Vector2(startX + (columns - 1) * (cellSizeX + spacing), startY - r * (cellSizeY + spacing)));
 
-        // top row (right to left)
+        // top row
         for (int c = columns - 1; c >= 0; c--)
             positions.Add(new Vector2(startX + c * (cellSizeX + spacing), startY));
 
-        // left column (top to bottom)
+        // left column
         for (int r = 1; r < rows - 1; r++)
             positions.Add(new Vector2(startX, startY - r * (cellSizeY + spacing)));
 
-        // instantiate tiles
+        // Instantiate tiles
         for (int i = 0; i < positions.Count; i++)
         {
             GameObject tile = Instantiate(tilePrefab, boardParent, false);
@@ -87,12 +86,28 @@ public class BoardCreator : MonoBehaviour
             rt.sizeDelta = new Vector2(cellSizeX, cellSizeY);
             rt.anchoredPosition = positions[i];
 
-            tile.GetComponent<TileController>().SetupTile(tileDataList[i]);
+            var controller = tile.GetComponent<TileController>();
+            controller.SetupTile(tileDataList[i]);
+
+            // Special Korean tile names
+            switch (i)
+            {
+                case 0:
+                    controller.SetSpecialText("출발");
+                    break;
+                case 5:
+                    controller.SetSpecialText("무인도");
+                    break;
+                case 10:
+                    controller.SetSpecialText("침묵");
+                    break;
+                case 15:
+                    controller.SetSpecialText("강탈");
+                    break;
+                default:
+                    controller.SetSpecialText("");
+                    break;
+            }
         }
     }
-
-
 }
-
-
-
