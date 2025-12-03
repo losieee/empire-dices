@@ -48,7 +48,9 @@ public class BoardCreator : MonoBehaviour
 
     void GenerateBoard()
     {
-        tileManager.tiles.Clear();   // remove old
+        tileManager.tiles.Clear();   
+        tileManager.tileDatas.Clear();
+
 
         float boardWidth = boardParent.rect.width;
         float boardHeight = boardParent.rect.height;
@@ -112,7 +114,9 @@ public class BoardCreator : MonoBehaviour
                     break;
             }
 
-            tileManager.tiles.Add(tile.transform); 
+            tileManager.tiles.Add(tile.transform);
+            tileManager.tileDatas.Add(tileDataList[i]);
+
         }
     }
 }

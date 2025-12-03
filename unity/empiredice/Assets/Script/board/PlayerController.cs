@@ -8,18 +8,17 @@ public class PlayerController : MonoBehaviour
     public int currentIndex = 0;
     public float moveSpeed = 0.25f;
 
-    public Image tokenImage;        // PlayerToken에 있는 Image
-    public Sprite[] tokenSprites;   // 말 종류 스프라이트 배열
+    public Image tokenImage;
+    public Sprite[] tokenSprites;
 
-    // --- 이동 코루틴 ---
+    public System.Action<int> OnTileArrived;
+
     public IEnumerator Move(int steps, List<Transform> tiles)
     {
         for (int i = 0; i < steps; i++)
         {
             currentIndex++;
-
-            if (currentIndex >= tiles.Count)
-                currentIndex = 0;   // 한 바퀴 돌면 0으로
+            if (currentIndex >= tiles.Count) currentIndex = 0;
 
             Vector3 targetPos = tiles[currentIndex].position;
 
@@ -32,14 +31,14 @@ public class PlayerController : MonoBehaviour
             yield return new WaitForSeconds(0.1f);
         }
 
-        Debug.Log("도착 tile index : " + currentIndex);
+        Debug.Log("플레이어 이동 후 위치 : " + currentIndex);
+        OnTileArrived?.Invoke(currentIndex); 
+        yield break;
     }
 
-    // --- 말 변경 로직 ---
+
     public void ChangeToken(int index)
     {
-        if (tokenSprites.Length == 0) return;
-
         tokenImage.sprite = tokenSprites[index];
     }
 }
