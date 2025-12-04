@@ -1,36 +1,38 @@
-﻿using UnityEngine;
-using TMPro;
+﻿using TMPro;
+using UnityEngine;
 
 public class DiceManager : MonoBehaviour
 {
     public TextMeshProUGUI diceText;
     public TileManager tileManager;
-    public PlayerController player;
+    public PlayerController[] players; // 플레이어 배열
     public TilePurchaseUI purchaseUI;
+
+    int currentPlayerIndex = 0;
 
     private void Start()
     {
         purchaseUI.gameObject.SetActive(false);
-        player.OnTileArrived += HandleArrival;
+        foreach (var p in players)
+            p.OnTileArrived += HandleArrival;
     }
 
-    void HandleArrival(int index)
+    void HandleArrival(int index, PlayerController player)
     {
-        Debug.Log("도착한 타일 번호 : " + index);
+        Debug.Log("도착한 플레이어: " + player.playerId);
 
-        
+        purchaseUI.player = player;     
         purchaseUI.ShowForTile(index);
     }
 
     public void RollDice()
     {
-        int dice = Random.Range(1, 7);  // 1~6
+        var player = players[currentPlayerIndex]; // 현재 턴 플레이어
+
+        int dice = Random.Range(1, 7);
         diceText.text = dice.ToString();
         StartCoroutine(player.Move(dice, tileManager.tiles));
-    }
 
-    public void SelectToken(int index)
-    {
-        player.ChangeToken(index);
+        currentPlayerIndex = (currentPlayerIndex + 1) % players.Length; // 턴 변경
     }
 }

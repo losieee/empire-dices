@@ -35,13 +35,14 @@ public class TilePurchaseUI : MonoBehaviour
         currentTileIndex = tileIndex;
         TileData data = tileManager.GetTile(tileIndex);
 
-        if (data == null || data.tileType != "territory")
+        // territory가 아니거나 이미 소유된 경우
+        if (data == null || data.tileType != "territory" || data.isOwned)
         {
-            Debug.Log("territory 아님 → UI 안 띄움");
+            Debug.Log("territory 아님 또는 이미 구매됨 → UI 안 띄움");
             return;
         }
 
-        panelRoot.SetActive(true);  // 변경된 부분
+        gameObject.SetActive(true);
         titleText.text = "영토 구매";
         descText.text = $"{data.grade} 영토를 구매하시겠습니까?";
     }
@@ -50,11 +51,19 @@ public class TilePurchaseUI : MonoBehaviour
 
     void OnClickBuy()
     {
-        Debug.Log($"타일 {currentTileIndex} 구매");
-        // TODO: 나중에 여기서 DB / 소유자 정보 처리
+        TileData data = tileManager.GetTile(currentTileIndex);
+
+        // 현재 턴의 플레이어 ID 적용
+        data.isOwned = true;
+        data.ownerId = player.playerId;
+
+        tileManager.tiles[currentTileIndex]
+            .GetComponent<TileController>()
+            .UpdateAppearance();
 
         gameObject.SetActive(false);
     }
+
 
     void OnClickSkip()
     {

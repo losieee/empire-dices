@@ -368,7 +368,7 @@ GameObject:
   - component: {fileID: 431658535}
   - component: {fileID: 431658534}
   m_Layer: 5
-  m_Name: PlayerToken
+  m_Name: Player 1 Token
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -392,6 +392,8 @@ MonoBehaviour:
   tokenSprites:
   - {fileID: 21300000, guid: 0d674b7e903ad1b479e6604d3855bf82, type: 3}
   - {fileID: 21300000, guid: f1d8684b2397b7349811e91245422d27, type: 3}
+  playerId: 0
+  token: {fileID: 431658533}
 --- !u!114 &431658535
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -885,6 +887,102 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 814172476}
   m_CullTransparentMesh: 1
+--- !u!1 &852291160
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 852291161}
+  - component: {fileID: 852291163}
+  - component: {fileID: 852291162}
+  - component: {fileID: 852291164}
+  m_Layer: 5
+  m_Name: Player 2 Token
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &852291161
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 852291160}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 893257897}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0.5, y: 0.5}
+  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: -575.4979, y: -303.43256}
+  m_SizeDelta: {x: 76.8245, y: 71.2164}
+  m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &852291162
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 852291160}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_Material: {fileID: 0}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_RaycastTarget: 1
+  m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
+  m_Maskable: 1
+  m_OnCullStateChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  m_Sprite: {fileID: 21300000, guid: f1d8684b2397b7349811e91245422d27, type: 3}
+  m_Type: 0
+  m_PreserveAspect: 0
+  m_FillCenter: 1
+  m_FillMethod: 4
+  m_FillAmount: 1
+  m_FillClockwise: 1
+  m_FillOrigin: 0
+  m_UseSpriteMesh: 0
+  m_PixelsPerUnitMultiplier: 1
+--- !u!222 &852291163
+CanvasRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 852291160}
+  m_CullTransparentMesh: 1
+--- !u!114 &852291164
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 852291160}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 54a3f6c9490b7904baf47ba0e4cfbfbf, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  currentIndex: 0
+  moveSpeed: 4
+  tokenImage: {fileID: 852291162}
+  tokenSprites:
+  - {fileID: 21300000, guid: f1d8684b2397b7349811e91245422d27, type: 3}
+  - {fileID: 21300000, guid: f1d8684b2397b7349811e91245422d27, type: 3}
+  playerId: 1
+  token: {fileID: 852291160}
 --- !u!1 &893257893
 GameObject:
   m_ObjectHideFlags: 0
@@ -980,10 +1078,11 @@ RectTransform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 465008689}
+  - {fileID: 431658537}
+  - {fileID: 852291161}
   - {fileID: 106806449}
   - {fileID: 1656938402}
   - {fileID: 1007649102}
-  - {fileID: 431658537}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -1451,7 +1550,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   diceText: {fileID: 1007649100}
   tileManager: {fileID: 1893811253}
-  player: {fileID: 431658534}
+  players:
+  - {fileID: 431658534}
+  - {fileID: 852291164}
   purchaseUI: {fileID: 106806450}
 --- !u!4 &1217371931
 Transform:

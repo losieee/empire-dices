@@ -514,3 +514,7 @@ MonoBehaviour:
   weaponCardImage: {fileID: 4899307266365347465}
   gradeText: {fileID: 1953758845483554489}
   specialText: {fileID: 2830518970614440644}
+  background: {fileID: 6193865061564438717}
+  player1Color: {r: 1, g: 0.9411765, b: 0.47058824, a: 1}
+  player2Color: {r: 0.47058824, g: 0.7058824, b: 1, a: 1}
+  defaultColor: {r: 1, g: 1, b: 1, a: 1}
