@@ -18,104 +18,115 @@
 <br><br>
 
 <button id="rollDice" disabled>주사위 굴리기</button>
+<button id="useWeapon" disabled>무기 사용</button>
+<br><br>
 
 <h3>현재 턴: <span id="turnDisplay">없음</span></h3>
+
 <h3>플레이어 상태</h3>
 <pre id="states" style="background:#eef;padding:10px"></pre>
+
+<h3>무기 인벤토리</h3>
+<pre id="inventory" style="background:#efe;padding:10px"></pre>
 
 <h3>로그</h3>
 <pre id="log" style="width:100%;height:300px;background:#eee;padding:10px;overflow-y:scroll;"></pre>
 
 <script>
-let socket = null;
-let currentRoom = null;
-let myUserId = null;
+let socket = null
+let currentRoom = null
+let myUserId = null
 
 function log(msg) {
-    const box = document.getElementById("log");
-    box.innerHTML += msg + "\n";
-    box.scrollTop = box.scrollHeight;
+    const box = document.getElementById("log")
+    box.innerHTML += msg + "\n"
+    box.scrollTop = box.scrollHeight
 }
 
 document.getElementById("connect").onclick = () => {
-    const token = document.getElementById("token").value;
+    if (socket) return log("이미 연결됨")
+    const token = document.getElementById("token").value
 
     try {
-        myUserId = JSON.parse(atob(token.split(".")[1])).user_id;
+        myUserId = JSON.parse(atob(token.split(".")[1])).user_id
     } catch (e) {
-        return log("JWT Token을 먼저 입력하세요");
+        return log("JWT Token을 먼저 입력하세요")
     }
 
-    socket = io("http://localhost:3000", {
-        auth: { token }
-    });
+    socket = io("http://localhost:3000", { auth: { token } })
 
-    socket.on("connect", () => log("접속: " + socket.id));
+    socket.on("connect", () => log("접속 " + socket.id))
 
     socket.on("roomCreated", (id) => {
-        currentRoom = id;
-        document.getElementById("sessionId").value = id;
-        log("방 생성 완료: " + id);
-    });
+        currentRoom = id
+        document.getElementById("sessionId").value = id
+        log("방 생성 완료 " + id)
+    })
 
     socket.on("joinedRoom", (id) => {
-        currentRoom = id;
-        log("방 입장 완료: " + id);
-    });
+        currentRoom = id
+        log("방 입장 완료 " + id)
+    })
 
-    socket.on("players", (data) => {
-        log("players: " + JSON.stringify(data));
-    });
+    socket.on("players", (data) => log("players " + JSON.stringify(data)))
 
-    socket.on("gameStart", () => {
-        log("게임 시작!");
-    });
+    socket.on("gameStart", () => log("게임 시작"))
 
     socket.on("stateUpdate", (data) => {
-        document.getElementById("states").innerText = JSON.stringify(data, null, 2);
-    });
+        document.getElementById("states").innerText = JSON.stringify(data, null, 2)
+    })
+
+    socket.on("weaponUpdate", (data) => {
+        document.getElementById("inventory").innerText = JSON.stringify(data, null, 2)
+        log("무기 인벤토리 갱신")
+    })
+
+    socket.on("weaponUsed", (data) => {
+        log("무기 사용 user=" + data.userId + " weaponId=" + data.weaponId +
+            " damage=" + data.damage + " shield=" + data.usedShield)
+
+        socket.emit("getInventory", { sessionId: currentRoom }) // 인벤토리 새로 요청
+    })
 
     socket.on("turnChange", (nextTurnId) => {
-        document.getElementById("turnDisplay").innerText = nextTurnId;
+        document.getElementById("turnDisplay").innerText = nextTurnId
+        document.getElementById("rollDice").disabled = nextTurnId !== myUserId
+        document.getElementById("useWeapon").disabled = nextTurnId !== myUserId
+        log("턴 변경 " + nextTurnId)
+    })
 
-        if (nextTurnId === myUserId) {
-            document.getElementById("rollDice").disabled = false;
-            log(`내 턴입니다! (user_id=${myUserId})`);
-        } else {
-            document.getElementById("rollDice").disabled = true;
-        }
+    socket.on("dice", (v) => log("dice " + v))
+    socket.on("tileEvent", (tile) => log("타일 " + tile.tile_type + " value=" + tile.value))
+    socket.on("stealLand", (data) => log("강탈 발생 index=" + data.stolenIndex))
 
-        log("턴 변경: " + nextTurnId);
-    });
-
-    socket.on("dice", (v) => {
-        log("dice : " + v);
-    });
-
-    socket.on("notYourTurn", () => {
-        log("내 턴 아님");
-    });
-
-    socket.on("tileEvent", (tile) => {
-        log(`타일 도착 -> type=${tile.tile_type}, value=${tile.value}`);
-    });
-};
+    socket.on("gameEnd", (data) => {
+        log("게임 종료 WINNER=" + data.winner)
+        document.getElementById("rollDice").disabled = true
+        document.getElementById("useWeapon").disabled = true
+    })
+}
 
 document.getElementById("createRoom").onclick = () => {
-    socket.emit("createRoom");
-    log("createRoom 요청");
-};
+    socket.emit("createRoom")
+    log("createRoom 요청")
+}
 
 document.getElementById("joinRoom").onclick = () => {
-    const sessionId = document.getElementById("sessionId").value;
-    socket.emit("joinRoom", { sessionId });
-    log("joinRoom 요청: " + sessionId);
-};
+    socket.emit("joinRoom", { sessionId: document.getElementById("sessionId").value })
+    log("joinRoom 요청")
+}
 
 document.getElementById("rollDice").onclick = () => {
-    socket.emit("rollDice", { sessionId: currentRoom });
-    log("rollDice 요청");
-};
+    socket.emit("rollDice", { sessionId: currentRoom })
+    log("rollDice 요청")
+}
+
+document.getElementById("useWeapon").onclick = () => {
+    const weaponId = prompt("사용할 weaponId 입력")
+    if (!weaponId) return
+    socket.emit("useWeapon", { sessionId: currentRoom, weaponId: Number(weaponId) })
+    log("useWeapon 요청 id=" + weaponId)
+}
 </script>
 </body>
 </html>
