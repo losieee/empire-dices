@@ -1,4 +1,4 @@
-DROP DATABASE IF EXISTS empire_dice;
+	DROP DATABASE IF EXISTS empire_dice;
 CREATE DATABASE empire_dice;
 USE empire_dice;
 
@@ -79,3 +79,88 @@ INSERT INTO users (username, password_hash, created_at) VALUES
 ('test1', '$2b$10$COSvyWNxJfYCEJLQoRA4q.wgl0jDfws9ViZ0Rj2y07G9FmNtjdKkC', NOW()),
 ('test2', '$2b$10$COSvyWNxJfYCEJLQoRA4q.wgl0jDfws9ViZ0Rj2y07G9FmNtjdKkC', NOW());
 empire_dice
+
+
+INSERT INTO weapons (name, effect_type, value) VALUES
+('sword', 'sword', 1),
+('bow', 'bow', 3),
+('bomb', 'bomb', 5),
+('shield', 'shield', 0);
+
+
+TRUNCATE TABLE weapons;  -- 데이터 초기화
+ALTER TABLE weapons AUTO_INCREMENT = 1; 
+
+INSERT INTO weapons (name, effect_type, value) VALUES
+('sword', 'sword', 1),     -- 코인 1 감소 / 내 코인 1 증가
+('bow', 'bow', 3),         -- 코인 3 감소 / 내 코인 3 증가
+('bomb', 'bomb', 5),       -- empire_hp 5 감소
+('shield', 'shield', 0);  
+
+TRUNCATE TABLE territories_definition;
+ALTER TABLE territories_definition AUTO_INCREMENT = 1;
+
+INSERT INTO territories_definition
+(territory_name, territory_price, territory_toll, territory_grade, tile_type, tile_subtype)
+VALUES
+(NULL, NULL, NULL, NULL, '출발', NULL),
+('초급 영토', 5, 2, '약소국', '영토', NULL),
+('중급 영토', 8, 4, '강소국', '영토', NULL),
+(NULL, NULL, NULL, NULL, '무기', NULL),
+(NULL, NULL, NULL, NULL, '강탈', NULL),
+(NULL, NULL, NULL, NULL, '침묵', NULL),
+(NULL, NULL, NULL, NULL, '무인도', NULL),
+('최종 영토', 15, 7, '강소국', '영토', NULL);
+
+
+
+INSERT INTO territories_definition 
+(territory_name, territory_price, territory_toll, territory_grade, tile_type, tile_subtype)
+VALUES
+('미국',10, 5, '강대국', '영토', NULL),
+('중국',10, 5, '강대국', '영토', NULL),
+('러시아',10, 5, '강대국', '영토', NULL),
+('한국',10, 5, '강대국', '영토', NULL),
+
+('북한',5, 1, '약소국', '영토', NULL),
+('몽골',5, 1, '약소국', '영토', NULL),
+('소말리아',5, 1, '약소국', '영토', NULL),
+('이라크',5, 1, '약소국', '영토', NULL),
+('이란',5, 1, '약소국', '영토', NULL),
+('쿠바',5, 1, '약소국', '영토', NULL),
+('몰디브',5, 1, '약소국', '영토', NULL),
+('아프가니스탄',5, 1, '약소국', '영토', NULL);
+
+DROP TABLE territories_definition
+
+CREATE TABLE territories_definition (
+    territory_id INT AUTO_INCREMENT PRIMARY KEY,
+    territory_name VARCHAR(50) NOT NULL,
+    territory_price INT NULL,
+    territory_toll INT NULL,empire_dice
+    territory_grade ENUM('약소국','강대국') NULL,
+    tile_type ENUM('출발','영토','무기','무인도','침묵','강탈') NOT NULL,
+    tile_subtype VARCHAR(50) NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT INTO territories_definition (territory_name, territory_price, territory_toll, territory_grade, tile_type, tile_subtype)
+VALUES
+('출발', NULL, NULL, NULL, '출발', 'start'),
+
+('약소국 영토', 5, 1, '약소국', '영토', 'normal_weak'),
+('강대국 영토', 10, 5, '강대국', '영토', 'normal_strong'),
+
+('무기 카드', NULL, NULL, NULL, '무기', 'weapon_box'),
+
+('강탈', NULL, NULL, NULL, '강탈', 'special'),
+('침묵', NULL, NULL, NULL, '침묵', 'special'),
+('무인도', NULL, NULL, NULL, '무인도', 'special');
+
+
+ALTER TABLE player_states
+ADD CONSTRAINT fk_player_states_user
+FOREIGN KEY (user_id) REFERENCES users(user_id);
+
+ALTER TABLE player_states
+ADD CONSTRAINT fk_player_states_session
+FOREIGN KEY (session_id) REFERENCES game_sessions(session_id);

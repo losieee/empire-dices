@@ -1,12 +1,8 @@
--- ============================
--- 초기 데이터 INSERT
--- Empire Dice Web Game
--- ============================
 
 -- 1) 무기 테이블 초기 데이터
 INSERT INTO weapons (weapon_id, name, effect_type, value) VALUES
-(1, 'sword', 'sword', 1),     -- 상대 코인 1 감소, 내 코인 1 증가
-(2, 'bow', 'bow', 3),         -- 상대 코인 3 감소, 내 코인 3 증가
+(1, 'sword', 'sword', 1),     -- 상대 empire_hp 1 감소
+(2, 'bow', 'bow', 3),         -- 상대 empire_hp 3 감소 
 (3, 'bomb', 'bomb', 5),       -- 상대 empire_hp 5 감소
 (4, 'shield', 'shield', 0);   -- 다음 공격 무효, shield_count +1
 
