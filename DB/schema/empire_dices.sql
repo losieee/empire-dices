@@ -164,3 +164,66 @@ FOREIGN KEY (user_id) REFERENCES users(user_id);
 ALTER TABLE player_states
 ADD CONSTRAINT fk_player_states_session
 FOREIGN KEY (session_id) REFERENCES game_sessions(session_id);
+
+ALTER TABLE game_sessions
+ADD CONSTRAINT fk_game_sessions_player1
+FOREIGN KEY (player1_id) REFERENCES users(user_id);
+
+ALTER TABLE game_sessions
+ADD CONSTRAINT fk_game_sessions_player2
+FOREIGN KEY (player2_id) REFERENCES users(user_id);
+
+ALTER TABLE game_sessions
+ADD CONSTRAINT fk_game_sessions_winner
+FOREIGN KEY (winner_id) REFERENCES users(user_id);
+
+
+ALTER TABLE player_weapons
+ADD CONSTRAINT fk_player_weapons_session
+FOREIGN KEY (session_id) REFERENCES game_sessions(session_id);
+
+ALTER TABLE player_weapons
+ADD CONSTRAINT fk_player_weapons_user
+FOREIGN KEY (user_id) REFERENCES users(user_id);
+
+ALTER TABLE player_weapons
+ADD CONSTRAINT fk_player_weapons_weapon
+FOREIGN KEY (weapon_id) REFERENCES weapons(weapon_id);
+
+
+TRUNCATE player_weapons;
+TRUNCATE game_sessions;
+TRUNCATE player_states;
+
+
+SET FOREIGN_KEY_CHECKS = 1;
+
+ALTER TABLE player_weapons
+ADD CONSTRAINT fk_player_weapons_session
+FOREIGN KEY (session_id) REFERENCES game_sessions(session_id);
+
+ALTER TABLE player_weapons
+ADD CONSTRAINT fk_player_weapons_user
+FOREIGN KEY (user_id) REFERENCES users(user_id);
+
+ALTER TABLE player_weapons
+ADD CONSTRAINT fk_player_weapons_weapon
+FOREIGN KEY (weapon_id) REFERENCES weapons(weapon_id);
+
+SELECT 
+    tc.CONSTRAINT_NAME,
+    tc.TABLE_NAME,
+    kcu.COLUMN_NAME,
+    kcu.REFERENCED_TABLE_NAME,
+    kcu.REFERENCED_COLUMN_NAME
+FROM 
+    information_schema.TABLE_CONSTRAINTS AS tc
+JOIN 
+    information_schema.KEY_COLUMN_USAGE AS kcu
+    ON tc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME
+WHERE 
+    tc.CONSTRAINT_TYPE = 'FOREIGN KEY'
+    AND tc.TABLE_SCHEMA = 'empire_dice'
+ORDER BY 
+    tc.TABLE_NAME;
+
