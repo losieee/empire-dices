@@ -5,132 +5,132 @@ using System.Collections;
 
 public class LobbyUI : MonoBehaviour
 {
-    [Header("Panels")]
+    public static LobbyUI Instance;
+
     public GameObject lobbyPanel;
     public GameObject registerPanel;
+    public GameObject roomListPanel;
+    public GameObject waitingRoomPanel;
 
-    [Header("Login Inputs")]
+    public TMP_InputField regUsernameInput;
+    public TMP_InputField regPasswordInput;
+
     public TMP_InputField loginUsernameInput;
     public TMP_InputField loginPasswordInput;
 
-    [Header("Register Inputs")]
-    public TMP_InputField regUsernameInput;
-    public TMP_InputField regPasswordInput;
+    public Transform roomListContent;
+    public GameObject roomItemPrefab;
+    public TMP_Text waitingInfoText;
+
+    void Awake() => Instance = this;
 
     void Start()
     {
         lobbyPanel.SetActive(true);
         registerPanel.SetActive(false);
+        roomListPanel.SetActive(false);
+        waitingRoomPanel.SetActive(false);
     }
 
-    // 회원가입 패널 열기
     public void OpenRegister()
     {
         lobbyPanel.SetActive(false);
         registerPanel.SetActive(true);
     }
 
-    // 로비로 돌아가기
     public void BackToLobby()
     {
         registerPanel.SetActive(false);
+        roomListPanel.SetActive(false);
+        waitingRoomPanel.SetActive(false);
         lobbyPanel.SetActive(true);
     }
 
-    // 회원가입 요청
     public void RegisterUser()
     {
-        string username = regUsernameInput.text;
-        string password = regPasswordInput.text;
-
-        Debug.Log($"회원가입 요청 → {username} / {password}");
-        StartCoroutine(RegisterRequest(username, password));
+        StartCoroutine(RegisterRequest(
+            regUsernameInput.text,
+            regPasswordInput.text
+        ));
     }
 
-    private IEnumerator RegisterRequest(string user, string pass)
+    IEnumerator RegisterRequest(string user, string pass)
     {
         var json = JsonUtility.ToJson(new RegisterData(user, pass));
-        byte[] bodyRaw = System.Text.Encoding.UTF8.GetBytes(json);
+        byte[] body = System.Text.Encoding.UTF8.GetBytes(json);
 
         UnityWebRequest www = new UnityWebRequest("http://localhost:3000/auth/register", "POST");
-        www.uploadHandler = new UploadHandlerRaw(bodyRaw);
+        www.uploadHandler = new UploadHandlerRaw(body);
         www.downloadHandler = new DownloadHandlerBuffer();
         www.SetRequestHeader("Content-Type", "application/json");
 
-        Debug.Log("Sending register request...");
-
         yield return www.SendWebRequest();
 
-        if (www.result != UnityWebRequest.Result.Success)
-        {
-            Debug.LogError("회원가입 실패: " + www.error + "\nResponse: " + www.downloadHandler.text);
-        }
-        else
-        {
-            Debug.Log("회원가입 성공!");
+        if (www.result == UnityWebRequest.Result.Success)
             BackToLobby();
-        }
     }
 
-    // -------------------------
-    // 로그인 요청
-    // -------------------------
     public void LoginUser()
     {
-        string username = loginUsernameInput.text;
-        string password = loginPasswordInput.text;
-
-        Debug.Log($"로그인 요청 → {username} / {password}");
-
-        StartCoroutine(LoginRequest(username, password));
+        StartCoroutine(LoginRequest(
+            loginUsernameInput.text,
+            loginPasswordInput.text
+        ));
     }
 
-    private IEnumerator LoginRequest(string user, string pass)
+    IEnumerator LoginRequest(string user, string pass)
     {
         var json = JsonUtility.ToJson(new RegisterData(user, pass));
-        byte[] bodyRaw = System.Text.Encoding.UTF8.GetBytes(json);
+        byte[] body = System.Text.Encoding.UTF8.GetBytes(json);
 
         UnityWebRequest www = new UnityWebRequest("http://localhost:3000/auth/login", "POST");
-        www.uploadHandler = new UploadHandlerRaw(bodyRaw);
+        www.uploadHandler = new UploadHandlerRaw(body);
         www.downloadHandler = new DownloadHandlerBuffer();
         www.SetRequestHeader("Content-Type", "application/json");
 
-        Debug.Log("Sending login request...");
-
         yield return www.SendWebRequest();
 
-        if (www.result != UnityWebRequest.Result.Success)
+        if (www.result == UnityWebRequest.Result.Success)
         {
-            Debug.LogError("로그인 실패: " + www.error + "\nResponse: " + www.downloadHandler.text);
-        }
-        else
-        {
-            Debug.Log("로그인 성공!");
-            Debug.Log("Response: " + www.downloadHandler.text);
+            LoginResponse res = JsonUtility.FromJson<LoginResponse>(www.downloadHandler.text);
 
-            // JSON -> 토큰 파싱
-            LoginResponse response = JsonUtility.FromJson<LoginResponse>(www.downloadHandler.text);
+            PlayerPrefs.SetString("jwt_token", res.token);
 
-            // 🔥 PlayerPrefs에 토큰 저장
-            PlayerPrefs.SetString("token", response.token);
-            PlayerPrefs.Save();
-            Debug.Log("토큰 저장 완료: " + response.token);
-
-            // 🔥 WebSocket 연결 시작
             WSClient.Instance.Connect();
+            StartCoroutine(WaitAuth(res.token));
 
-            // 잠시 연결을 기다리고 인증 요청 보내기
-            StartCoroutine(SendAuthAfterDelay(response.token));
+            ShowRoomList();
         }
     }
 
-    // WebSocket 연결 후 토큰 전달
-    private IEnumerator SendAuthAfterDelay(string token)
+    IEnumerator WaitAuth(string token)
     {
-        yield return new WaitForSeconds(0.5f); // WebSocket이 열릴 시간 확보
+        yield return new WaitUntil(() => WSClient.Instance.IsConnected);
         WSClient.Instance.SendAuth(token);
     }
 
+    void ShowRoomList()
+    {
+        lobbyPanel.SetActive(false);
+        registerPanel.SetActive(false);
+        roomListPanel.SetActive(true);
+        waitingRoomPanel.SetActive(false);
+    }
+
+    public void CreateRoom()
+    {
+        WSClient.Instance.CreateRoom();
+    }
+
+    public void OpenWaitingRoom(string sessionId)
+    {
+        lobbyPanel.SetActive(false);
+        registerPanel.SetActive(false);
+        roomListPanel.SetActive(false);
+        waitingRoomPanel.SetActive(true);
+
+        waitingInfoText.text = $"�� ��ȣ: {sessionId}\n1/2 �÷��̾� �����...";
+    }
 }
 
 [System.Serializable]
@@ -138,21 +138,7 @@ public class RegisterData
 {
     public string username;
     public string password;
-
     public RegisterData(string u, string p)
-    {
-        username = u;
-        password = p;
-    }
-}
-
-[System.Serializable]
-public class LoginData
-{
-    public string username;
-    public string password;
-
-    public LoginData(string u, string p)
     {
         username = u;
         password = p;
