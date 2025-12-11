@@ -14,7 +14,6 @@ app.use(cors())
 app.use(express.json())
 app.use("/auth", authRouter)
 
-// 테스트 페이지
 app.get("/test", (req, res) => {
     res.sendFile(path.join(__dirname, "test.html"))
 })
@@ -22,7 +21,6 @@ app.get("/test", (req, res) => {
 const server = http.createServer(app)
 const wss = new WebSocket.Server({ server })
 
-// DB 연결
 const pool = mysql.createPool({
     host: "localhost",
     user: "root",
@@ -32,24 +30,20 @@ const pool = mysql.createPool({
 
 console.log("MySQL Pool Connected!")
 
+// ------------------------------------------------------
 // WebSocket 연결
+// ------------------------------------------------------
 wss.on("connection", (ws) => {
     console.log(">> WebSocket Client Connected")
-    console.log(">> Connected Clients:", wss.clients.size)
 
     ws.on("close", () => {
         console.log(">> WebSocket Client Disconnected")
     })
 
     ws.on("message", async (raw) => {
-
         let msg
-        try {
-            msg = JSON.parse(raw)
-        } catch (e) {
-            console.log("JSON Parse Error:", e)
-            return
-        }
+        try { msg = JSON.parse(raw) }
+        catch (e) { console.log("JSON ERR:", e); return }
 
         const type = msg.type
         console.log(">> MESSAGE:", msg)
@@ -62,7 +56,6 @@ wss.on("connection", (ws) => {
                 const decoded = jwt.verify(msg.token, process.env.JWT_SECRET)
                 ws.user = decoded
 
-                console.log(">> AUTH OK:", decoded.user_id)
                 ws.send(JSON.stringify({
                     type: "auth_ok",
                     userId: decoded.user_id
@@ -91,45 +84,124 @@ wss.on("connection", (ws) => {
                 sessionId: ws.sessionId
             }))
 
-            console.log("ROOM CREATED:", ws.sessionId)
             return
         }
 
         // ------------------------------------------------------
         // JOIN ROOM
         // ------------------------------------------------------
-        if (type === "joinRoom") {
-            const sessionId = msg.sessionId
-            const userId = ws.user.user_id
+        // JOIN ROOM
+if (type === "joinRoom") {
+    const sessionId = msg.sessionId;
+    const userId = ws.user.user_id;
 
-            await pool.query(
-                "UPDATE game_sessions SET player2_id=?, status='waiting' WHERE session_id=?",
-                [userId, sessionId]
+    console.log(">> JOIN ROOM 요청:", sessionId, "user:", userId);
+
+    // 1) 방 정보 조회
+    const [rows] = await pool.query(
+        "SELECT player1_id, player2_id FROM game_sessions WHERE session_id=?",
+        [sessionId]
+    );
+
+    if (rows.length === 0) {
+        ws.send(JSON.stringify({ type: "joinFail", reason: "RoomNotFound" }));
+        return;
+    }
+
+    const room = rows[0];
+
+    // 2) 방이 꽉 찼는지 검사
+    const count =
+        (room.player1_id ? 1 : 0) +
+        (room.player2_id ? 1 : 0);
+
+    if (count >= 2) {
+        ws.send(JSON.stringify({ type: "joinFail", reason: "RoomFull" }));
+        return;
+    }
+
+    // 3) player2 자리 배정
+    await pool.query(
+        "UPDATE game_sessions SET player2_id=?, status='ready' WHERE session_id=?",
+        [userId, sessionId]
+    );
+
+    ws.sessionId = sessionId;
+
+    ws.send(JSON.stringify({
+        type: "joinSuccess",
+        sessionId
+    }));
+
+    console.log(`USER ${userId} JOINED ROOM ${sessionId}`);
+
+    // 4) 두 명이 모두 입장했는지 다시 확인
+    const [updated] = await pool.query(
+        "SELECT player1_id, player2_id FROM game_sessions WHERE session_id=?",
+        [sessionId]
+    );
+
+    const newCount =
+        (updated[0].player1_id ? 1 : 0) +
+        (updated[0].player2_id ? 1 : 0);
+
+    // 5) 두 명이 되면 게임 시작
+    if (newCount === 2) {
+        console.log(`>> ROOM ${sessionId} 게임 시작!`);
+
+        wss.clients.forEach(client => {
+            if (client.readyState === WebSocket.OPEN && client.sessionId == sessionId) {
+                client.send(JSON.stringify({
+                    type: "gameStart",
+                    sessionId
+                }));
+            }
+        });
+    }
+
+    return;
+}
+
+
+        // ------------------------------------------------------
+        // GAME READY (Unity가 dice 씬 로드 후 보내는 메시지)
+        // ------------------------------------------------------
+        if (type === "gameReady") {
+            const sessionId = msg.sessionId
+
+            const [rows] = await pool.query(
+                "SELECT player1_id, player2_id FROM game_sessions WHERE session_id=?",
+                [sessionId]
             )
 
-            ws.sessionId = sessionId
+            if (rows.length === 0) return
 
-            ws.send(JSON.stringify({
-                type: "roomJoined",
-                sessionId
-            }))
+            const room = rows[0]
 
-            console.log("USER JOINED ROOM:", sessionId)
+            // 각 클라이언트에게 playerId 전달
+            wss.clients.forEach(client => {
+                if (client.readyState === WebSocket.OPEN && client.sessionId == sessionId) {
+
+                    const isP1 = (client.user.user_id == room.player1_id)
+
+                    client.send(JSON.stringify({
+                        type: "gameInit",
+                        playerId: isP1 ? 1 : 2,
+                        turn: 1 // 턴은 player1 시작
+                    }))
+                }
+            })
+
             return
         }
 
         // ------------------------------------------------------
-        // DELETE ROOM (취소 버튼)
+        // DELETE ROOM
         // ------------------------------------------------------
         if (type === "deleteRoom") {
             const sessionId = msg.sessionId
 
-            console.log(">> DELETE ROOM:", sessionId)
-
-            await pool.query(
-                "DELETE FROM game_sessions WHERE session_id=?",
-                [sessionId]
-            )
+            await pool.query("DELETE FROM game_sessions WHERE session_id=?", [sessionId])
 
             ws.send(JSON.stringify({
                 type: "roomDeleted",
@@ -142,9 +214,8 @@ wss.on("connection", (ws) => {
     })
 })
 
-
 // ------------------------------------------------------
-// 방 리스트 API (Unity에서 GET 요청으로 사용 중)
+// 방 목록 API
 // ------------------------------------------------------
 app.get("/rooms", async (req, res) => {
     const [rows] = await pool.query(
@@ -159,8 +230,4 @@ app.get("/rooms", async (req, res) => {
     res.json(roomList)
 })
 
-
-// ------------------------------------------------------
-// 서버 시작
-// ------------------------------------------------------
-server.listen(3000, () => console.log("SERVER STARTED ON PORT 3000"))
+server.listen(3000, () => console.log("SERVER STARTED 3000"))

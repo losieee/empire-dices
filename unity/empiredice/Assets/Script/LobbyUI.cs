@@ -25,9 +25,17 @@ public class LobbyUI : MonoBehaviour
 
     void Awake()
     {
-        Instance = this;
-        DontDestroyOnLoad(gameObject);
+        if (Instance == null)
+        {
+            Instance = this;
+            DontDestroyOnLoad(gameObject);
+        }
+        else
+        {
+            Destroy(gameObject);  // ★ 중복 제거
+        }
     }
+
 
 
     void Start()
@@ -36,6 +44,7 @@ public class LobbyUI : MonoBehaviour
         registerPanel.SetActive(false);
         roomListPanel.SetActive(false);
         waitingRoomPanel.SetActive(false);
+        UnityMainThreadDispatcher.Initialize();
     }
 
     public void OpenRegister()
@@ -174,10 +183,16 @@ public class LobbyUI : MonoBehaviour
 
         waitingInfoText.text = $"방 번호: {sessionId}\n1/2 플레이어 대기중...";
     }
+    public void HideWaitingRoom()
+    {
+        waitingRoomPanel.SetActive(false);
+    }
 
 }
 
 [System.Serializable]
+
+
 public class RegisterData
 {
     public string username;

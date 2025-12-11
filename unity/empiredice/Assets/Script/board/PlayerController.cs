@@ -1,47 +1,47 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.UI;
+﻿    using System.Collections;
+    using System.Collections.Generic;
+    using UnityEngine;
+    using UnityEngine.UI;
 
-public class PlayerController : MonoBehaviour
-{
-    public int currentIndex = 0;
-    public float moveSpeed = 0.25f;
-
-    public Image tokenImage;
-    public Sprite[] tokenSprites;
-
-    public System.Action<int, PlayerController> OnTileArrived;
-    public int playerId = 0;  // Player1 = 0, Player2 = 1
-    public GameObject token;
-
-
-    public IEnumerator Move(int steps, List<Transform> tiles)
+    public class PlayerController : MonoBehaviour
     {
-        for (int i = 0; i < steps; i++)
+        public int currentIndex = 0;
+        public float moveSpeed = 0.25f;
+
+        public Image tokenImage;
+        public Sprite[] tokenSprites;
+
+        public System.Action<int, PlayerController> OnTileArrived;
+        public int playerId = 0;  // Player1 = 0, Player2 = 1
+        public GameObject token;
+
+
+        public IEnumerator Move(int steps, List<Transform> tiles)
         {
-            currentIndex++;
-
-            if (currentIndex >= tiles.Count)
-                currentIndex = 0;
-
-            Vector3 target = tiles[currentIndex].position;
-
-            while (Vector3.Distance(transform.position, target) > 0.05f)
+            for (int i = 0; i < steps; i++)
             {
-                transform.position = Vector3.MoveTowards(transform.position, target, moveSpeed);
-                yield return null;
+                currentIndex++;
+
+                if (currentIndex >= tiles.Count)
+                    currentIndex = 0;
+
+                Vector3 target = tiles[currentIndex].position;
+
+                while (Vector3.Distance(transform.position, target) > 0.05f)
+                {
+                    transform.position = Vector3.MoveTowards(transform.position, target, moveSpeed);
+                    yield return null;
+                }
+
+                yield return new WaitForSeconds(0.1f);
             }
 
-            yield return new WaitForSeconds(0.1f);
+            OnTileArrived?.Invoke(currentIndex, this); 
         }
 
-        OnTileArrived?.Invoke(currentIndex, this); 
-    }
 
-
-    public void ChangeToken(int index)
-    {
-        tokenImage.sprite = tokenSprites[index];
+        public void ChangeToken(int index)
+        {
+            tokenImage.sprite = tokenSprites[index];
+        }
     }
-}

@@ -10,12 +10,25 @@ public class DiceManager : MonoBehaviour
 
     int currentPlayerIndex = 0;
 
-    private void Start()
+    void Start()
     {
-        purchaseUI.gameObject.SetActive(false);
-        foreach (var p in players)
-            p.OnTileArrived += HandleArrival;
+        // 1) MainLobby에서 넘어온 UI 모두 제거
+        var ui = GameObject.FindObjectOfType<LobbyUI>();
+        if (ui != null)
+            ui.gameObject.SetActive(false);
+
+        // 2) 서버에 준비 완료 전송
+        WSClient.Instance.SendGameReady();
+
+        // 3) playerId 셋팅
+        players[0].playerId = 1;
+        players[1].playerId = 2;
+
+        Debug.Log("내 플레이어 ID = " + GameInfo.MyPlayerId);
     }
+
+
+
 
     void HandleArrival(int index, PlayerController player)
     {

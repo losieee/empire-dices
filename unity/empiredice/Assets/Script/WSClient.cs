@@ -1,7 +1,8 @@
+Ôªøusing NativeWebSocket;
+using Newtonsoft.Json;
 using System;
 using UnityEngine;
-using NativeWebSocket;
-using Newtonsoft.Json;
+using UnityEngine.SceneManagement;
 
 public class WSClient : MonoBehaviour
 {
@@ -38,20 +39,9 @@ public class WSClient : MonoBehaviour
 
         ws = new WebSocket(serverUrl);
 
-        ws.OnOpen += () =>
-        {
-            Debug.Log("º≠πˆ ø¨∞· º∫∞¯!");
-        };
-
-        ws.OnError += (e) =>
-        {
-            Debug.LogError("WebSocket Error: " + e);
-        };
-
-        ws.OnClose += (e) =>
-        {
-            Debug.Log("º≠πˆ ø¨∞· ¡æ∑·");
-        };
+        ws.OnOpen += () => Debug.Log("ÏÑúÎ≤Ñ Ïó∞Í≤∞ ÏÑ±Í≥µ!");
+        ws.OnError += (e) => Debug.LogError("WebSocket Error: " + e);
+        ws.OnClose += (e) => Debug.Log("ÏÑúÎ≤Ñ Ïó∞Í≤∞ Ï¢ÖÎ£å");
 
         ws.OnMessage += (bytes) =>
         {
@@ -64,32 +54,51 @@ public class WSClient : MonoBehaviour
 
     private void HandleMessage(string json)
     {
-        Debug.Log("[º≠πˆ ∏ﬁºº¡ˆ] " + json);
+        Debug.Log("[ÏÑúÎ≤Ñ Î©îÏÑ∏ÏßÄ] " + json);
 
         var msg = JsonConvert.DeserializeObject<ServerMessage>(json);
-
         if (msg == null) return;
 
         switch (msg.type)
         {
             case "auth_ok":
                 UserId = msg.userId;
-                Debug.Log("¿Œ¡ı º∫∞¯: " + UserId);
                 break;
 
             case "roomCreated":
                 SessionId = msg.sessionId;
-                Debug.Log("πÊ ª˝º∫ º∫∞¯! ID = " + SessionId);
-                LobbyUI.Instance.OpenWaitingRoom(SessionId); // °Á ø©±‚∑Œ ∫Ø∞Ê
+                LobbyUI.Instance.OpenWaitingRoom(SessionId);
                 break;
 
+            case "joinSuccess":
+                SessionId = msg.sessionId;
+                break;
 
             case "roomDeleted":
-                Debug.Log("πÊ ªË¡¶ øœ∑·");
+                Debug.Log("Î∞© ÏÇ≠Ï†ú ÏôÑÎ£å");
                 break;
 
-            default:
-                Debug.Log("æÀ ºˆ æ¯¥¬ ∏ﬁΩ√¡ˆ: " + msg.type);
+            case "gameStart":
+                Debug.Log("Í≤åÏûÑ ÏãúÏûë Î©îÏãúÏßÄ ÏàòÏã†Îê®");
+
+                // ÎåÄÍ∏∞Ìå®ÎÑê Îã´Í∏∞
+                if (LobbyUI.Instance != null)
+                    LobbyUI.Instance.HideWaitingRoom();
+
+                UnityMainThreadDispatcher.Enqueue(() =>
+                {
+                    LobbyUI.Instance.HideWaitingRoom();   // ‚òÖ Ïî¨ Ï†ÑÌôò Ï†ÑÏóê UI Ï†úÍ±∞
+                    SceneManager.LoadScene("dice");
+                });
+
+                break;
+
+
+            // üî• Í≤åÏûÑÏî¨ÏóêÏÑú ÌîåÎ†àÏù¥Ïñ¥ ID/ÌÑ¥ ÏÑ§Ï†ï
+            case "gameInit":
+                GameInfo.MyPlayerId = msg.playerId;
+                GameInfo.CurrentTurn = msg.turn;
+                Debug.Log("Í≤åÏûÑ Ï¥àÍ∏∞Ìôî: MyPlayer=" + msg.playerId);
                 break;
         }
     }
@@ -97,53 +106,37 @@ public class WSClient : MonoBehaviour
     public async void SendAuth(string token)
     {
         if (!IsConnected) return;
-
-        var msg = new { type = "auth", token };
-        await ws.SendText(JsonConvert.SerializeObject(msg));
+        await ws.SendText(JsonConvert.SerializeObject(new { type = "auth", token }));
     }
 
     public async void CreateRoom()
     {
         if (!IsConnected) return;
-
-        var msg = new { type = "createRoom" };
-        await ws.SendText(JsonConvert.SerializeObject(msg));
+        await ws.SendText(JsonConvert.SerializeObject(new { type = "createRoom" }));
     }
+
     public async void JoinRoom(int sessionId)
     {
         if (!IsConnected) return;
-
-        var msg = new
-        {
-            type = "joinRoom",
-            sessionId = sessionId
-        };
-
-        await ws.SendText(JsonConvert.SerializeObject(msg));
+        await ws.SendText(JsonConvert.SerializeObject(new { type = "joinRoom", sessionId }));
     }
 
+    public async void SendGameReady()
+    {
+        if (!IsConnected || string.IsNullOrEmpty(SessionId)) return;
 
-
+        await ws.SendText(JsonConvert.SerializeObject(new
+        {
+            type = "gameReady",
+            sessionId = SessionId
+        }));
+    }
 
     public async void DeleteRoom()
     {
-        Debug.Log("DeleteRoom() »£√‚µ . SessionId = " + SessionId);
+        if (!IsConnected || string.IsNullOrEmpty(SessionId)) return;
 
-        if (!IsConnected)
-        {
-            Debug.Log("DeleteRoom Ω«∆–: WS ø¨∞· æ»µ ");
-            return;
-        }
-
-        if (string.IsNullOrEmpty(SessionId))
-        {
-            Debug.Log("DeleteRoom Ω«∆–: SessionId æ¯¿Ω!");
-            return;
-        }
-
-        var msg = new { type = "deleteRoom", sessionId = SessionId };
-        await ws.SendText(JsonConvert.SerializeObject(msg));
-
+        await ws.SendText(JsonConvert.SerializeObject(new { type = "deleteRoom", sessionId = SessionId }));
         SessionId = null;
     }
     public void ResetSession()
@@ -159,5 +152,6 @@ public class ServerMessage
     public string type;
     public string sessionId;
     public string userId;
-    public int playerCount;
+    public int playerId;
+    public int turn;
 }
