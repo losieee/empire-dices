@@ -1,7 +1,8 @@
-using UnityEngine;
+﻿using UnityEngine;
 using TMPro;
 using UnityEngine.Networking;
 using System.Collections;
+using System;
 
 public class LobbyUI : MonoBehaviour
 {
@@ -22,7 +23,12 @@ public class LobbyUI : MonoBehaviour
     public GameObject roomItemPrefab;
     public TMP_Text waitingInfoText;
 
-    void Awake() => Instance = this;
+    void Awake()
+    {
+        Instance = this;
+        DontDestroyOnLoad(gameObject);
+    }
+
 
     void Start()
     {
@@ -45,7 +51,13 @@ public class LobbyUI : MonoBehaviour
         waitingRoomPanel.SetActive(false);
         lobbyPanel.SetActive(true);
     }
-
+    public void BackToRoomList()
+    {
+        registerPanel.SetActive(false);
+        lobbyPanel.SetActive(false);
+        waitingRoomPanel.SetActive(false);
+        roomListPanel.SetActive(true);
+    }
     public void RegisterUser()
     {
         StartCoroutine(RegisterRequest(
@@ -109,28 +121,60 @@ public class LobbyUI : MonoBehaviour
         WSClient.Instance.SendAuth(token);
     }
 
-    void ShowRoomList()
+    IEnumerator LoadRoomList()
+    {
+        UnityWebRequest www = UnityWebRequest.Get("http://localhost:3000/rooms");
+        yield return www.SendWebRequest();
+
+        if (www.result != UnityWebRequest.Result.Success)
+            yield break;
+
+        string json = "{\"rooms\":" + www.downloadHandler.text + "}";
+        RoomListResponse res = JsonUtility.FromJson<RoomListResponse>(json);
+
+        // 기존 목록 제거
+        foreach (Transform child in roomListContent)
+            Destroy(child.gameObject);
+
+        // 🚨 방이 하나도 없을 때는 아무것도 만들지 않음!!
+        if (res.rooms == null || res.rooms.Length == 0)
+            yield break;
+
+        // 방 목록 생성
+        foreach (RoomInfo room in res.rooms)
+        {
+            var item = Instantiate(roomItemPrefab, roomListContent);
+            item.GetComponent<RoomItemUI>().Setup(room.session_id, room.player_count);
+        }
+    }
+
+
+
+
+
+    public void ShowRoomList()
     {
         lobbyPanel.SetActive(false);
         registerPanel.SetActive(false);
         roomListPanel.SetActive(true);
-        waitingRoomPanel.SetActive(false);
+
+        StartCoroutine(LoadRoomList());
     }
 
     public void CreateRoom()
     {
         WSClient.Instance.CreateRoom();
     }
-
     public void OpenWaitingRoom(string sessionId)
     {
         lobbyPanel.SetActive(false);
         registerPanel.SetActive(false);
-        roomListPanel.SetActive(false);
+        roomListPanel.SetActive(false);  
         waitingRoomPanel.SetActive(true);
 
-        waitingInfoText.text = $"�� ��ȣ: {sessionId}\n1/2 �÷��̾� �����...";
+        waitingInfoText.text = $"방 번호: {sessionId}\n1/2 플레이어 대기중...";
     }
+
 }
 
 [System.Serializable]
@@ -150,3 +194,17 @@ public class LoginResponse
 {
     public string token;
 }
+
+[System.Serializable]
+public class RoomInfo   
+{
+    public int session_id;
+    public int player_count;
+}
+
+[System.Serializable]
+public class RoomListResponse
+{
+    public RoomInfo[] rooms;
+}
+

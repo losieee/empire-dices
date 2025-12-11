@@ -6,6 +6,7 @@ const WebSocket = require("ws")
 const jwt = require("jsonwebtoken")
 const mysql = require("mysql2/promise")
 const path = require("path")
+
 const authRouter = require("./routes/auth")
 
 const app = express()
@@ -13,6 +14,7 @@ app.use(cors())
 app.use(express.json())
 app.use("/auth", authRouter)
 
+// 테스트 페이지
 app.get("/test", (req, res) => {
     res.sendFile(path.join(__dirname, "test.html"))
 })
@@ -20,6 +22,7 @@ app.get("/test", (req, res) => {
 const server = http.createServer(app)
 const wss = new WebSocket.Server({ server })
 
+// DB 연결
 const pool = mysql.createPool({
     host: "localhost",
     user: "root",
@@ -27,6 +30,9 @@ const pool = mysql.createPool({
     database: "empiredice"
 })
 
+console.log("MySQL Pool Connected!")
+
+// WebSocket 연결
 wss.on("connection", (ws) => {
     console.log(">> WebSocket Client Connected")
     console.log(">> Connected Clients:", wss.clients.size)
@@ -36,73 +42,125 @@ wss.on("connection", (ws) => {
     })
 
     ws.on("message", async (raw) => {
-        console.log(">> Message Received:", raw.toString())
 
-        const msg = JSON.parse(raw)
-        const t = msg.type
+        let msg
+        try {
+            msg = JSON.parse(raw)
+        } catch (e) {
+            console.log("JSON Parse Error:", e)
+            return
+        }
 
-        if (t === "auth") {
+        const type = msg.type
+        console.log(">> MESSAGE:", msg)
+
+        // ------------------------------------------------------
+        // AUTH
+        // ------------------------------------------------------
+        if (type === "auth") {
             try {
                 const decoded = jwt.verify(msg.token, process.env.JWT_SECRET)
                 ws.user = decoded
-                console.log(">> AUTH SUCCESS:", decoded.user_id)
-                ws.send(JSON.stringify({ type:"auth_ok", userId:decoded.user_id }))
+
+                console.log(">> AUTH OK:", decoded.user_id)
+                ws.send(JSON.stringify({
+                    type: "auth_ok",
+                    userId: decoded.user_id
+                }))
             } catch (e) {
-                console.log(">> AUTH FAILED")
-                ws.send(JSON.stringify({ type:"auth_fail" }))
+                ws.send(JSON.stringify({ type: "auth_fail" }))
             }
+            return
         }
 
-        if (t === "reconnect") {
-            const sessionId = msg.sessionId
-            ws.sessionId = sessionId
-            console.log(">> RECONNECT:", sessionId)
-
-            const [states] = await pool.query(
-                "SELECT user_id,board_position,coin,empire_hp,shield_count,turn_skip_count,silence_count FROM player_states WHERE session_id=?",
-                [sessionId]
-            )
-            ws.send(JSON.stringify({ type:"stateUpdate", states }))
-
-            const [updatedTiles] = await pool.query(
-                "SELECT index_pos,tile_type,value FROM board_tiles WHERE session_id=?",
-                [sessionId]
-            )
-            ws.send(JSON.stringify({ type:"boardSync", tiles:updatedTiles }))
-
-            const [inv] = await pool.query(
-                "SELECT p.id,p.weapon_id,w.name,w.effect_type,w.value FROM player_weapons p JOIN weapons w ON p.weapon_id=w.weapon_id WHERE p.session_id=? AND p.user_id=?",
-                [sessionId,ws.user.user_id]
-            )
-            ws.send(JSON.stringify({ type:"weaponUpdate", inventory:inv }))
-
-            const [turn] = await pool.query(
-                "SELECT current_turn FROM game_sessions WHERE session_id=?",
-                [sessionId]
-            )
-            ws.send(JSON.stringify({ type:"turnChange", nextTurn:turn[0].current_turn }))
-        }
-
-        if (t === "createRoom") {
+        // ------------------------------------------------------
+        // CREATE ROOM
+        // ------------------------------------------------------
+        if (type === "createRoom") {
             const userId = ws.user.user_id
-            console.log(">> CREATE ROOM by", userId)
 
             const [result] = await pool.query(
-                "INSERT INTO game_sessions (player1_id,status,created_at) VALUES (?,'waiting',NOW())",
+                "INSERT INTO game_sessions (player1_id, status, created_at) VALUES (?,'waiting',NOW())",
                 [userId]
             )
+
             ws.sessionId = result.insertId.toString()
-            ws.send(JSON.stringify({ type:"roomCreated", sessionId:ws.sessionId }))
+
+            ws.send(JSON.stringify({
+                type: "roomCreated",
+                sessionId: ws.sessionId
+            }))
+
+            console.log("ROOM CREATED:", ws.sessionId)
+            return
+        }
+
+        // ------------------------------------------------------
+        // JOIN ROOM
+        // ------------------------------------------------------
+        if (type === "joinRoom") {
+            const sessionId = msg.sessionId
+            const userId = ws.user.user_id
+
+            await pool.query(
+                "UPDATE game_sessions SET player2_id=?, status='waiting' WHERE session_id=?",
+                [userId, sessionId]
+            )
+
+            ws.sessionId = sessionId
+
+            ws.send(JSON.stringify({
+                type: "roomJoined",
+                sessionId
+            }))
+
+            console.log("USER JOINED ROOM:", sessionId)
+            return
+        }
+
+        // ------------------------------------------------------
+        // DELETE ROOM (취소 버튼)
+        // ------------------------------------------------------
+        if (type === "deleteRoom") {
+            const sessionId = msg.sessionId
+
+            console.log(">> DELETE ROOM:", sessionId)
+
+            await pool.query(
+                "DELETE FROM game_sessions WHERE session_id=?",
+                [sessionId]
+            )
+
+            ws.send(JSON.stringify({
+                type: "roomDeleted",
+                sessionId
+            }))
+
+            ws.sessionId = null
+            return
         }
     })
 })
 
-function broadcast(sessionId,payload){
-    wss.clients.forEach((c)=>{
-        if (c.readyState === WebSocket.OPEN && c.sessionId === sessionId) {
-            c.send(JSON.stringify(payload))
-        }
-    })
-}
 
-server.listen(3000,()=>console.log("server 3000"))
+// ------------------------------------------------------
+// 방 리스트 API (Unity에서 GET 요청으로 사용 중)
+// ------------------------------------------------------
+app.get("/rooms", async (req, res) => {
+    const [rows] = await pool.query(
+        "SELECT session_id, player1_id, player2_id FROM game_sessions"
+    )
+
+    const roomList = rows.map(r => ({
+        session_id: r.session_id,
+        player_count: (r.player1_id ? 1 : 0) + (r.player2_id ? 1 : 0)
+    }))
+
+    res.json(roomList)
+})
+
+
+// ------------------------------------------------------
+// 서버 시작
+// ------------------------------------------------------
+server.listen(3000, () => console.log("SERVER STARTED ON PORT 3000"))

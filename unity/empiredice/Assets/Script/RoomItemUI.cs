@@ -1,19 +1,19 @@
-using UnityEngine;
 using TMPro;
-using UnityEngine.UI;
+using UnityEngine;
 
 public class RoomItemUI : MonoBehaviour
 {
-    public TMP_Text roomNameText;
-    private int id;
+    public TMP_Text label;
+    int sessionId;
 
-    public void Setup(int roomId)
+    public void Setup(int id, int count)
     {
-        id = roomId;
-        roomNameText.text = $"{roomId}번 방 (1/2)";
-        GetComponent<Button>().onClick.AddListener(() =>
-        {
-            WSClient.Instance.JoinRoom(id);
-        });
+        sessionId = id;
+        label.text = $"{id}번방 ({count}/2)";
+    }
+
+    public void OnClick()
+    {
+        WSClient.Instance.JoinRoom(sessionId);
     }
 }
