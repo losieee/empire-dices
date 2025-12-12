@@ -32,9 +32,7 @@ INSERT INTO country (id, country_name, country_grade, country_flag_image) VALUES
 (22, '쿠바', '약', 'CU.png'),
 (23, '몰디브', '약', 'MV.png'),
 (24, '아프가니스탄', '약', 'AF.png');
-
+DELETE FROM player_states;
 DELETE FROM game_sessions;
-ALTER TABLE game_sessions AUTO_INCREMENT = 1;
 
-ALTER TABLE game_sessions 
-MODIFY COLUMN status VARCHAR(10);
+ALTER TABLE game_sessions AUTO_INCREMENT = 1;

@@ -92,75 +92,71 @@ wss.on("connection", (ws) => {
         // ------------------------------------------------------
         // JOIN ROOM
 if (type === "joinRoom") {
-    const sessionId = msg.sessionId;
-    const userId = ws.user.user_id;
+    try {
+        const sessionId = msg.sessionId
+        const userId = ws.user.user_id
 
-    console.log(">> JOIN ROOM 요청:", sessionId, "user:", userId);
+        const [rows] = await pool.query(
+            "SELECT player1_id, player2_id FROM game_sessions WHERE session_id=?",
+            [sessionId]
+        )
 
-    // 1) 방 정보 조회
-    const [rows] = await pool.query(
-        "SELECT player1_id, player2_id FROM game_sessions WHERE session_id=?",
-        [sessionId]
-    );
+        if (rows.length === 0) {
+            ws.send(JSON.stringify({ type: "joinFail", reason: "RoomNotFound" }))
+            return
+        }
 
-    if (rows.length === 0) {
-        ws.send(JSON.stringify({ type: "joinFail", reason: "RoomNotFound" }));
-        return;
+        const room = rows[0]
+        const count =
+            (room.player1_id ? 1 : 0) +
+            (room.player2_id ? 1 : 0)
+
+        if (count >= 2) {
+            ws.send(JSON.stringify({ type: "joinFail", reason: "RoomFull" }))
+            return
+        }
+
+        await pool.query(
+            "UPDATE game_sessions SET player2_id=?, status='ready' WHERE session_id=?",
+            [userId, sessionId]
+        )
+
+        ws.sessionId = sessionId
+
+        ws.send(JSON.stringify({
+            type: "joinSuccess",
+            sessionId
+        }))
+
+        const [updated] = await pool.query(
+            "SELECT player1_id, player2_id FROM game_sessions WHERE session_id=?",
+            [sessionId]
+        )
+
+        const newCount =
+            (updated[0].player1_id ? 1 : 0) +
+            (updated[0].player2_id ? 1 : 0)
+
+        if (newCount === 2) {
+            wss.clients.forEach(client => {
+                if (client.readyState === WebSocket.OPEN && client.sessionId == sessionId) {
+                    client.send(JSON.stringify({
+                        type: "gameStart",
+                        sessionId
+                    }))
+                }
+            })
+        }
+
+    } catch (err) {
+        console.error("JOIN ROOM ERROR:", err)
+        ws.send(JSON.stringify({ type: "joinFail", reason: "ServerError" }))
     }
 
-    const room = rows[0];
-
-    // 2) 방이 꽉 찼는지 검사
-    const count =
-        (room.player1_id ? 1 : 0) +
-        (room.player2_id ? 1 : 0);
-
-    if (count >= 2) {
-        ws.send(JSON.stringify({ type: "joinFail", reason: "RoomFull" }));
-        return;
-    }
-
-    // 3) player2 자리 배정
-    await pool.query(
-        "UPDATE game_sessions SET player2_id=?, status='ready' WHERE session_id=?",
-        [userId, sessionId]
-    );
-
-    ws.sessionId = sessionId;
-
-    ws.send(JSON.stringify({
-        type: "joinSuccess",
-        sessionId
-    }));
-
-    console.log(`USER ${userId} JOINED ROOM ${sessionId}`);
-
-    // 4) 두 명이 모두 입장했는지 다시 확인
-    const [updated] = await pool.query(
-        "SELECT player1_id, player2_id FROM game_sessions WHERE session_id=?",
-        [sessionId]
-    );
-
-    const newCount =
-        (updated[0].player1_id ? 1 : 0) +
-        (updated[0].player2_id ? 1 : 0);
-
-    // 5) 두 명이 되면 게임 시작
-    if (newCount === 2) {
-        console.log(`>> ROOM ${sessionId} 게임 시작!`);
-
-        wss.clients.forEach(client => {
-            if (client.readyState === WebSocket.OPEN && client.sessionId == sessionId) {
-                client.send(JSON.stringify({
-                    type: "gameStart",
-                    sessionId
-                }));
-            }
-        });
-    }
-
-    return;
+    return
 }
+
+  
 
 
         // ------------------------------------------------------
