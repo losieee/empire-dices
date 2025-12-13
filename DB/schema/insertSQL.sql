@@ -30,7 +30,7 @@ INSERT INTO country (id, country_name, country_grade, country_flag_image) VALUES
 (20, '이라크', '약', 'IQ.png'),
 (21, '이란', '약', 'IR.png'),
 (22, '쿠바', '약', 'CU.png'),
-(23, '몰디브', '약', 'MV.png'),W
+(23, '몰디브', '약', 'MV.png'),
 (24, '아프가니스탄', '약', 'AF.png');
 DELETE FROM player_states;
 DELETE FROM game_sessions;

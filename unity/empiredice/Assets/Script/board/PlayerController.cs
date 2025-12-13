@@ -47,8 +47,7 @@ public class PlayerController : MonoBehaviour
 
             if (data.tileType == "territory" && !data.isOwned)
             {
-                FindObjectOfType<TilePurchaseUI>()
-                    ?.ShowForTile(currentIndex);
+                DiceManager.Instance.purchaseUI.ShowForTile(currentIndex);
             }
 
             WSClient.Instance.SendMoveEnd(currentIndex);

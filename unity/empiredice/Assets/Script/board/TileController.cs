@@ -53,10 +53,12 @@ public class TileController : MonoBehaviour
     {
         if (data != null && data.isOwned)
         {
-            if (data.ownerId == 0)
+            if (data.ownerId == 1)
                 background.color = player1Color;
-            else if (data.ownerId == 1)
+            else if (data.ownerId == 2)
                 background.color = player2Color;
+            else
+                background.color = defaultColor;
         }
         else
         {

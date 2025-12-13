@@ -9,6 +9,7 @@ public class TilePurchaseUI : MonoBehaviour
     public Button buyButton;
     public Button skipButton;
     public TileManager tileManager;
+    public GameObject panelRoot;
 
     int currentTileIndex = -1;
 
@@ -16,12 +17,20 @@ public class TilePurchaseUI : MonoBehaviour
     {
         buyButton.onClick.AddListener(OnClickBuy);
         skipButton.onClick.AddListener(OnClickSkip);
-        gameObject.SetActive(false);
+        panelRoot.SetActive(false);
     }
 
     public void ShowForTile(int tileIndex)
     {
-        TileData data = tileManager.GetTile(tileIndex);
+        var tm = tileManager != null ? tileManager : TileManager.Instance;
+        if (tm == null)
+        {
+            Debug.LogError("[PurchaseUI] TileManager is NULL");
+            return;
+        }
+
+        TileData data = tm.GetTile(tileIndex);
+        if (data == null) return;
         if (data == null) return;
         if (data.tileType != "territory") return;
         if (data.isOwned) return;
@@ -31,7 +40,7 @@ public class TilePurchaseUI : MonoBehaviour
 
         titleText.text = "영토 구매";
         descText.text = $"{data.grade} 영토를 구매하시겠습니까?";
-        gameObject.SetActive(true);
+        panelRoot.SetActive(true);
     }
 
     void OnClickBuy()
@@ -50,6 +59,6 @@ public class TilePurchaseUI : MonoBehaviour
     void Close()
     {
         currentTileIndex = -1;
-        gameObject.SetActive(false);
+        panelRoot.SetActive(false);
     }
 }
