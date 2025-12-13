@@ -1,51 +1,101 @@
 ﻿using TMPro;
 using UnityEngine;
+using System.Collections;
 
 public class DiceManager : MonoBehaviour
 {
+    public static DiceManager Instance;
+
     public TextMeshProUGUI diceText;
     public TileManager tileManager;
-    public PlayerController[] players; // 플레이어 배열
+    public PlayerController[] players;
     public TilePurchaseUI purchaseUI;
+    public GameObject rollDiceButton;
 
-    int currentPlayerIndex = 0;
+    int currentTurnPlayerId = -1;
+
+    void Awake()
+    {
+        Instance = this;
+    }
 
     void Start()
     {
-        // 1) MainLobby에서 넘어온 UI 모두 제거
-        var ui = GameObject.FindObjectOfType<LobbyUI>();
+        var ui = FindObjectOfType<LobbyUI>();
         if (ui != null)
             ui.gameObject.SetActive(false);
 
-        // 2) 서버에 준비 완료 전송
-        WSClient.Instance.SendGameReady();
-
-        // 3) playerId 셋팅
         players[0].playerId = 1;
         players[1].playerId = 2;
 
-        Debug.Log("내 플레이어 ID = " + GameInfo.MyPlayerId);
+        if (rollDiceButton != null)
+            rollDiceButton.SetActive(false);
+
+        StartCoroutine(SendReadyWhenConnected());
+
+        if (WSClient.Instance != null && WSClient.Instance.PendingTurnPlayerId != -1)
+            OnTurnStart(WSClient.Instance.PendingTurnPlayerId);
     }
 
-
-
-
-    void HandleArrival(int index, PlayerController player)
+    IEnumerator SendReadyWhenConnected()
     {
-        Debug.Log("도착한 플레이어: " + player.playerId);
+        yield return new WaitUntil(() =>
+            WSClient.Instance != null &&
+            WSClient.Instance.IsConnected &&
+            !string.IsNullOrEmpty(WSClient.Instance.SessionId)
+        );
 
-        purchaseUI.player = player;     
-        purchaseUI.ShowForTile(index);
+        if (!WSClient.Instance.gameReadySent)
+        {
+            WSClient.Instance.gameReadySent = true;
+            WSClient.Instance.SendGameReady();
+        }
+    }
+
+    public void OnTurnStart(int playerId)
+    {
+        currentTurnPlayerId = playerId;
+        UpdateButtonState();
+    }
+
+    public void OnDiceResult(int playerId, int dice)
+    {
+        if (diceText != null)
+            diceText.text = dice.ToString();
+
+        if (rollDiceButton != null)
+            rollDiceButton.SetActive(false);
+
+        PlayerController player = GetPlayer(playerId);
+        if (player == null) return;
+
+        player.Move(dice, tileManager.tiles);
+    }
+
+    PlayerController GetPlayer(int id)
+    {
+        foreach (var p in players)
+            if (p.playerId == id)
+                return p;
+        return null;
     }
 
     public void RollDice()
     {
-        var player = players[currentPlayerIndex]; // 현재 턴 플레이어
+        Debug.Log($"[CLIENT] RollDice click myId={GameInfo.MyPlayerId}, turn={currentTurnPlayerId}");
 
-        int dice = Random.Range(1, 7);
-        diceText.text = dice.ToString();
-        StartCoroutine(player.Move(dice, tileManager.tiles));
+        if (GameInfo.MyPlayerId != currentTurnPlayerId)
+            return;
 
-        currentPlayerIndex = (currentPlayerIndex + 1) % players.Length; // 턴 변경
+        if (rollDiceButton != null)
+            rollDiceButton.SetActive(false);
+
+        WSClient.Instance.SendRollDice();
+    }
+
+    void UpdateButtonState()
+    {
+        if (rollDiceButton == null) return;
+        rollDiceButton.SetActive(GameInfo.MyPlayerId == currentTurnPlayerId);
     }
 }

@@ -5,7 +5,6 @@ const cors = require("cors")
 const WebSocket = require("ws")
 const jwt = require("jsonwebtoken")
 const mysql = require("mysql2/promise")
-const path = require("path")
 
 const authRouter = require("./routes/auth")
 
@@ -13,10 +12,6 @@ const app = express()
 app.use(cors())
 app.use(express.json())
 app.use("/auth", authRouter)
-
-app.get("/test", (req, res) => {
-    res.sendFile(path.join(__dirname, "test.html"))
-})
 
 const server = http.createServer(app)
 const wss = new WebSocket.Server({ server })
@@ -28,52 +23,36 @@ const pool = mysql.createPool({
     database: "empiredice"
 })
 
-console.log("MySQL Pool Connected!")
+const games = new Map()
 
-// ------------------------------------------------------
-// WebSocket 연결
-// ------------------------------------------------------
 wss.on("connection", (ws) => {
-    console.log(">> WebSocket Client Connected")
-
-    ws.on("close", () => {
-        console.log(">> WebSocket Client Disconnected")
-    })
 
     ws.on("message", async (raw) => {
         let msg
-        try { msg = JSON.parse(raw) }
-        catch (e) { console.log("JSON ERR:", e); return }
+        try {
+            msg = JSON.parse(raw)
+        } catch {
+            return
+        }
 
         const type = msg.type
-        console.log(">> MESSAGE:", msg)
 
-        // ------------------------------------------------------
-        // AUTH
-        // ------------------------------------------------------
         if (type === "auth") {
             try {
                 const decoded = jwt.verify(msg.token, process.env.JWT_SECRET)
                 ws.user = decoded
-
-                ws.send(JSON.stringify({
-                    type: "auth_ok",
-                    userId: decoded.user_id
-                }))
-            } catch (e) {
+                ws.send(JSON.stringify({ type: "auth_ok", userId: decoded.user_id }))
+            } catch {
                 ws.send(JSON.stringify({ type: "auth_fail" }))
             }
             return
         }
 
-        // ------------------------------------------------------
-        // CREATE ROOM
-        // ------------------------------------------------------
         if (type === "createRoom") {
             const userId = ws.user.user_id
 
             const [result] = await pool.query(
-                "INSERT INTO game_sessions (player1_id, status, created_at) VALUES (?,'waiting',NOW())",
+                "INSERT INTO game_sessions (player1_id, status, created_at) VALUES (?, 'waiting', NOW())",
                 [userId]
             )
 
@@ -83,147 +62,155 @@ wss.on("connection", (ws) => {
                 type: "roomCreated",
                 sessionId: ws.sessionId
             }))
-
             return
         }
 
-        // ------------------------------------------------------
-        // JOIN ROOM
-        // ------------------------------------------------------
-        // JOIN ROOM
-if (type === "joinRoom") {
-    try {
-        const sessionId = msg.sessionId
-        const userId = ws.user.user_id
+        if (type === "joinRoom") {
+            const sessionId = msg.sessionId
+            const userId = ws.user.user_id
 
-        const [rows] = await pool.query(
-            "SELECT player1_id, player2_id FROM game_sessions WHERE session_id=?",
-            [sessionId]
-        )
+            const [rows] = await pool.query(
+                "SELECT player1_id, player2_id, status FROM game_sessions WHERE session_id=?",
+                [sessionId]
+            )
 
-        if (rows.length === 0) {
-            ws.send(JSON.stringify({ type: "joinFail", reason: "RoomNotFound" }))
-            return
-        }
+            if (rows.length === 0) {
+                ws.send(JSON.stringify({ type: "joinFail" }))
+                return
+            }
 
-        const room = rows[0]
-        const count =
-            (room.player1_id ? 1 : 0) +
-            (room.player2_id ? 1 : 0)
+            const room = rows[0]
+            if (room.status !== "waiting" || room.player2_id) {
+                ws.send(JSON.stringify({ type: "joinFail" }))
+                return
+            }
 
-        if (count >= 2) {
-            ws.send(JSON.stringify({ type: "joinFail", reason: "RoomFull" }))
-            return
-        }
+            await pool.query(
+                "UPDATE game_sessions SET player2_id=?, status='ready' WHERE session_id=?",
+                [userId, sessionId]
+            )
 
-        await pool.query(
-            "UPDATE game_sessions SET player2_id=?, status='ready' WHERE session_id=?",
-            [userId, sessionId]
-        )
+            ws.sessionId = sessionId
 
-        ws.sessionId = sessionId
+            ws.send(JSON.stringify({ type: "joinSuccess", sessionId }))
 
-        ws.send(JSON.stringify({
-            type: "joinSuccess",
-            sessionId
-        }))
-
-        const [updated] = await pool.query(
-            "SELECT player1_id, player2_id FROM game_sessions WHERE session_id=?",
-            [sessionId]
-        )
-
-        const newCount =
-            (updated[0].player1_id ? 1 : 0) +
-            (updated[0].player2_id ? 1 : 0)
-
-        if (newCount === 2) {
-            wss.clients.forEach(client => {
-                if (client.readyState === WebSocket.OPEN && client.sessionId == sessionId) {
-                    client.send(JSON.stringify({
-                        type: "gameStart",
-                        sessionId
-                    }))
+            wss.clients.forEach(c => {
+                if (c.readyState === WebSocket.OPEN && c.sessionId == sessionId) {
+                    c.send(JSON.stringify({ type: "gameStart", sessionId }))
                 }
             })
+            return
         }
 
-    } catch (err) {
-        console.error("JOIN ROOM ERROR:", err)
-        ws.send(JSON.stringify({ type: "joinFail", reason: "ServerError" }))
-    }
-
-    return
-}
-
-  
-
-
-        // ------------------------------------------------------
-        // GAME READY (Unity가 dice 씬 로드 후 보내는 메시지)
-        // ------------------------------------------------------
         if (type === "gameReady") {
             const sessionId = msg.sessionId
+            if (games.has(sessionId)) return
 
             const [rows] = await pool.query(
                 "SELECT player1_id, player2_id FROM game_sessions WHERE session_id=?",
                 [sessionId]
             )
-
             if (rows.length === 0) return
 
             const room = rows[0]
+            if (!room.player1_id || !room.player2_id) return
 
-            // 각 클라이언트에게 playerId 전달
-            wss.clients.forEach(client => {
-                if (client.readyState === WebSocket.OPEN && client.sessionId == sessionId) {
+            games.set(sessionId, {
+                turn: 1,
+                players: {
+                    1: { pos: 0 },
+                    2: { pos: 0 }
+                }
+            })
 
-                    const isP1 = (client.user.user_id == room.player1_id)
-
-                    client.send(JSON.stringify({
+            wss.clients.forEach(c => {
+                if (c.readyState === WebSocket.OPEN && c.sessionId == sessionId) {
+                    c.playerId = (c.user.user_id === room.player1_id) ? 1 : 2
+                    c.send(JSON.stringify({
                         type: "gameInit",
-                        playerId: isP1 ? 1 : 2,
-                        turn: 1 // 턴은 player1 시작
+                        playerId: c.playerId
                     }))
                 }
             })
 
+            wss.clients.forEach(c => {
+                if (c.readyState === WebSocket.OPEN && c.sessionId == sessionId) {
+                    c.send(JSON.stringify({
+                        type: "turnStart",
+                        playerId: 1
+                    }))
+                }
+            })
             return
         }
 
-        // ------------------------------------------------------
-        // DELETE ROOM
-        // ------------------------------------------------------
-        if (type === "deleteRoom") {
-            const sessionId = msg.sessionId
+if (type === "rollDice") {
+    const sessionId = msg.sessionId
+    const playerId = msg.playerId
+    const game = games.get(sessionId)
 
-            await pool.query("DELETE FROM game_sessions WHERE session_id=?", [sessionId])
+    if (!game || !playerId) {
+        console.log("[ROLL] invalid payload", msg)
+        return
+    }
 
-            ws.send(JSON.stringify({
-                type: "roomDeleted",
-                sessionId
+    if (playerId !== game.turn) {
+        console.log("[ROLL] not your turn", playerId, game.turn)
+        return
+    }
+
+    const dice = Math.floor(Math.random() * 6) + 1
+    console.log("[ROLL]", playerId, dice)
+
+    wss.clients.forEach(c => {
+        if (c.readyState === WebSocket.OPEN && c.sessionId == sessionId) {
+            c.send(JSON.stringify({
+                type: "diceResult",
+                playerId,
+                dice
             }))
-
-            ws.sessionId = null
-            return
         }
+    })
+}
+
+
+if (type === "moveEnd") {
+    const sessionId = msg.sessionId
+    const playerId = msg.playerId
+    const game = games.get(sessionId)
+
+    if (!game || !playerId) return
+
+    console.log("[MOVE END]", playerId, msg.tileIndex)
+
+    game.players[playerId].pos = msg.tileIndex
+    game.turn = playerId === 1 ? 2 : 1
+
+    wss.clients.forEach(c => {
+        if (c.readyState === WebSocket.OPEN && c.sessionId == sessionId) {
+            c.send(JSON.stringify({
+                type: "turnStart",
+                playerId: game.turn
+            }))
+        }
+    })
+}
+
+
     })
 })
 
-// ------------------------------------------------------
-// 방 목록 API
-// ------------------------------------------------------
 app.get("/rooms", async (req, res) => {
     const [rows] = await pool.query(
-        "SELECT session_id, player1_id, player2_id FROM game_sessions"
+        "SELECT session_id, player1_id, player2_id FROM game_sessions WHERE status='waiting'"
     )
 
-    const roomList = rows.map(r => ({
+    res.json(rows.map(r => ({
         session_id: r.session_id,
-        player_count: (r.player1_id ? 1 : 0) + (r.player2_id ? 1 : 0)
-    }))
-
-    res.json(roomList)
+        player_count:
+            (r.player1_id ? 1 : 0) +
+            (r.player2_id ? 1 : 0)
+    })))
 })
 
-server.listen(3000, () => console.log("SERVER STARTED 3000"))
+server.listen(3000, () => console.log("SERVER START 3000"))

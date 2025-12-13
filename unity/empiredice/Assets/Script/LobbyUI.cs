@@ -2,7 +2,6 @@
 using TMPro;
 using UnityEngine.Networking;
 using System.Collections;
-using System;
 
 public class LobbyUI : MonoBehaviour
 {
@@ -23,6 +22,8 @@ public class LobbyUI : MonoBehaviour
     public GameObject roomItemPrefab;
     public TMP_Text waitingInfoText;
 
+    GameObject templateItem;
+
     void Awake()
     {
         if (Instance == null)
@@ -32,11 +33,9 @@ public class LobbyUI : MonoBehaviour
         }
         else
         {
-            Destroy(gameObject);  // ★ 중복 제거
+            Destroy(gameObject);
         }
     }
-
-
 
     void Start()
     {
@@ -45,6 +44,16 @@ public class LobbyUI : MonoBehaviour
         roomListPanel.SetActive(false);
         waitingRoomPanel.SetActive(false);
         UnityMainThreadDispatcher.Initialize();
+
+        if (roomItemPrefab != null && roomItemPrefab.scene.IsValid())
+        {
+            templateItem = roomItemPrefab;
+            templateItem.SetActive(false);
+        }
+        else
+        {
+            templateItem = null;
+        }
     }
 
     public void OpenRegister()
@@ -60,19 +69,19 @@ public class LobbyUI : MonoBehaviour
         waitingRoomPanel.SetActive(false);
         lobbyPanel.SetActive(true);
     }
+
     public void BackToRoomList()
     {
         registerPanel.SetActive(false);
         lobbyPanel.SetActive(false);
         waitingRoomPanel.SetActive(false);
         roomListPanel.SetActive(true);
+        StartCoroutine(LoadRoomList());
     }
+
     public void RegisterUser()
     {
-        StartCoroutine(RegisterRequest(
-            regUsernameInput.text,
-            regPasswordInput.text
-        ));
+        StartCoroutine(RegisterRequest(regUsernameInput.text, regPasswordInput.text));
     }
 
     IEnumerator RegisterRequest(string user, string pass)
@@ -93,10 +102,7 @@ public class LobbyUI : MonoBehaviour
 
     public void LoginUser()
     {
-        StartCoroutine(LoginRequest(
-            loginUsernameInput.text,
-            loginPasswordInput.text
-        ));
+        StartCoroutine(LoginRequest(loginUsernameInput.text, loginPasswordInput.text));
     }
 
     IEnumerator LoginRequest(string user, string pass)
@@ -114,7 +120,6 @@ public class LobbyUI : MonoBehaviour
         if (www.result == UnityWebRequest.Result.Success)
         {
             LoginResponse res = JsonUtility.FromJson<LoginResponse>(www.downloadHandler.text);
-
             PlayerPrefs.SetString("jwt_token", res.token);
 
             WSClient.Instance.Connect();
@@ -130,6 +135,16 @@ public class LobbyUI : MonoBehaviour
         WSClient.Instance.SendAuth(token);
     }
 
+    public void ShowRoomList()
+    {
+        lobbyPanel.SetActive(false);
+        registerPanel.SetActive(false);
+        waitingRoomPanel.SetActive(false);
+        roomListPanel.SetActive(true);
+
+        StartCoroutine(LoadRoomList());
+    }
+
     IEnumerator LoadRoomList()
     {
         UnityWebRequest www = UnityWebRequest.Get("http://localhost:3000/rooms");
@@ -141,58 +156,59 @@ public class LobbyUI : MonoBehaviour
         string json = "{\"rooms\":" + www.downloadHandler.text + "}";
         RoomListResponse res = JsonUtility.FromJson<RoomListResponse>(json);
 
-        // 기존 목록 제거
-        foreach (Transform child in roomListContent)
-            Destroy(child.gameObject);
+        for (int i = roomListContent.childCount - 1; i >= 0; i--)
+        {
+            var child = roomListContent.GetChild(i).gameObject;
+            if (templateItem != null && child == templateItem) continue;
+            Destroy(child);
+        }
 
-        // 🚨 방이 하나도 없을 때는 아무것도 만들지 않음!!
         if (res.rooms == null || res.rooms.Length == 0)
             yield break;
 
-        // 방 목록 생성
-        foreach (RoomInfo room in res.rooms)
+        for (int i = 0; i < res.rooms.Length; i++)
         {
-            var item = Instantiate(roomItemPrefab, roomListContent);
-            item.GetComponent<RoomItemUI>().Setup(room.session_id, room.player_count);
+            GameObject item;
+
+            if (templateItem != null)
+            {
+                item = Instantiate(templateItem, roomListContent);
+                item.SetActive(true);
+            }
+            else
+            {
+                item = Instantiate(roomItemPrefab, roomListContent);
+            }
+
+            var ui = item.GetComponent<RoomItemUI>();
+            if (ui != null)
+                ui.Setup(res.rooms[i].session_id, res.rooms[i].player_count);
         }
-    }
-
-
-
-
-
-    public void ShowRoomList()
-    {
-        lobbyPanel.SetActive(false);
-        registerPanel.SetActive(false);
-        roomListPanel.SetActive(true);
-
-        StartCoroutine(LoadRoomList());
     }
 
     public void CreateRoom()
     {
         WSClient.Instance.CreateRoom();
     }
+
     public void OpenWaitingRoom(string sessionId)
     {
         lobbyPanel.SetActive(false);
         registerPanel.SetActive(false);
-        roomListPanel.SetActive(false);  
+        roomListPanel.SetActive(false);
         waitingRoomPanel.SetActive(true);
 
-        waitingInfoText.text = $"방 번호: {sessionId}\n1/2 플레이어 대기중...";
+        if (waitingInfoText != null)
+            waitingInfoText.text = $"방 번호: {sessionId}\n1/2 플레이어 대기중...";
     }
+
     public void HideWaitingRoom()
     {
         waitingRoomPanel.SetActive(false);
     }
-
 }
 
 [System.Serializable]
-
-
 public class RegisterData
 {
     public string username;
@@ -211,7 +227,7 @@ public class LoginResponse
 }
 
 [System.Serializable]
-public class RoomInfo   
+public class RoomInfo
 {
     public int session_id;
     public int player_count;
@@ -222,4 +238,3 @@ public class RoomListResponse
 {
     public RoomInfo[] rooms;
 }
-

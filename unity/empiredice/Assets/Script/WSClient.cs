@@ -8,13 +8,16 @@ public class WSClient : MonoBehaviour
 {
     public static WSClient Instance;
 
-    private WebSocket ws;
-    [SerializeField] private string serverUrl = "ws://127.0.0.1:3000";
+    WebSocket ws;
+    [SerializeField] string serverUrl = "ws://127.0.0.1:3000";
 
     public bool IsConnected => ws != null && ws.State == WebSocketState.Open;
 
-    public string SessionId { get; private set; }
-    public string UserId { get; private set; }
+    public string SessionId;
+    public string UserId;
+    public bool gameReadySent = false;
+
+    public int PendingTurnPlayerId = -1;
 
     void Awake()
     {
@@ -23,7 +26,10 @@ public class WSClient : MonoBehaviour
             Instance = this;
             DontDestroyOnLoad(gameObject);
         }
-        else Destroy(gameObject);
+        else
+        {
+            Destroy(gameObject);
+        }
     }
 
     void Update()
@@ -39,24 +45,24 @@ public class WSClient : MonoBehaviour
 
         ws = new WebSocket(serverUrl);
 
-        ws.OnOpen += () => Debug.Log("서버 연결 성공!");
-        ws.OnError += (e) => Debug.LogError("WebSocket Error: " + e);
+        ws.OnOpen += () => Debug.Log("서버 연결 성공");
+        ws.OnError += (e) => Debug.LogError(e);
         ws.OnClose += (e) => Debug.Log("서버 연결 종료");
 
         ws.OnMessage += (bytes) =>
         {
-            string msg = System.Text.Encoding.UTF8.GetString(bytes);
-            HandleMessage(msg);
+            string json = System.Text.Encoding.UTF8.GetString(bytes);
+            HandleMessage(json);
         };
 
         await ws.Connect();
     }
 
-    private void HandleMessage(string json)
+    void HandleMessage(string json)
     {
         Debug.Log("[서버 메세지] " + json);
 
-        var msg = JsonConvert.DeserializeObject<ServerMessage>(json);
+        ServerMessage msg = JsonConvert.DeserializeObject<ServerMessage>(json);
         if (msg == null) return;
 
         switch (msg.type)
@@ -75,30 +81,36 @@ public class WSClient : MonoBehaviour
                 break;
 
             case "roomDeleted":
-                Debug.Log("방 삭제 완료");
+                SessionId = null;
                 break;
 
             case "gameStart":
-                Debug.Log("게임 시작 메시지 수신됨");
-
-                // 대기패널 닫기
-                if (LobbyUI.Instance != null)
-                    LobbyUI.Instance.HideWaitingRoom();
-
+                gameReadySent = false;
+                PendingTurnPlayerId = -1;
                 UnityMainThreadDispatcher.Enqueue(() =>
                 {
-                    LobbyUI.Instance.HideWaitingRoom();   // ★ 씬 전환 전에 UI 제거
+                    if (LobbyUI.Instance != null)
+                        LobbyUI.Instance.HideWaitingRoom();
+
                     SceneManager.LoadScene("dice");
                 });
-
                 break;
 
-
-            // 🔥 게임씬에서 플레이어 ID/턴 설정
             case "gameInit":
                 GameInfo.MyPlayerId = msg.playerId;
-                GameInfo.CurrentTurn = msg.turn;
-                Debug.Log("게임 초기화: MyPlayer=" + msg.playerId);
+                Debug.Log("내 플레이어 ID = " + msg.playerId);
+                break;
+
+            case "turnStart":
+                if (DiceManager.Instance != null)
+                    DiceManager.Instance.OnTurnStart(msg.playerId);
+                else
+                    PendingTurnPlayerId = msg.playerId;
+                break;
+
+            case "diceResult":
+                if (DiceManager.Instance != null)
+                    DiceManager.Instance.OnDiceResult(msg.playerId, msg.dice);
                 break;
         }
     }
@@ -132,18 +144,45 @@ public class WSClient : MonoBehaviour
         }));
     }
 
+    public async void SendRollDice()
+    {
+        await ws.SendText(JsonConvert.SerializeObject(new
+        {
+            type = "rollDice",
+            sessionId = SessionId,
+            playerId = GameInfo.MyPlayerId
+        }));
+    }
+
+    public async void SendMoveEnd(int tileIndex)
+    {
+        await ws.SendText(JsonConvert.SerializeObject(new
+        {
+            type = "moveEnd",
+            sessionId = SessionId,
+            playerId = GameInfo.MyPlayerId,
+            tileIndex
+        }));
+    }
+
+
     public async void DeleteRoom()
     {
         if (!IsConnected || string.IsNullOrEmpty(SessionId)) return;
 
-        await ws.SendText(JsonConvert.SerializeObject(new { type = "deleteRoom", sessionId = SessionId }));
+        await ws.SendText(JsonConvert.SerializeObject(new
+        {
+            type = "deleteRoom",
+            sessionId = SessionId
+        }));
+
         SessionId = null;
     }
+
     public void ResetSession()
     {
         SessionId = null;
     }
-
 }
 
 [Serializable]
@@ -153,5 +192,5 @@ public class ServerMessage
     public string sessionId;
     public string userId;
     public int playerId;
-    public int turn;
+    public int dice;
 }

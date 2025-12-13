@@ -353,7 +353,7 @@ MonoBehaviour:
   buyButton: {fileID: 1540633431}
   skipButton: {fileID: 1091176160}
   tileManager: {fileID: 1893811253}
-  player: {fileID: 431658534}
+  player: {fileID: 0}
   panelRoot: {fileID: 106806445}
 --- !u!1 &431658533
 GameObject:
@@ -366,7 +366,7 @@ GameObject:
   - component: {fileID: 431658537}
   - component: {fileID: 431658536}
   - component: {fileID: 431658535}
-  - component: {fileID: 431658534}
+  - component: {fileID: 431658538}
   m_Layer: 5
   m_Name: Player 1 Token
   m_TagString: Untagged
@@ -374,26 +374,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &431658534
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 431658533}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 54a3f6c9490b7904baf47ba0e4cfbfbf, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  currentIndex: 0
-  moveSpeed: 4
-  tokenImage: {fileID: 431658535}
-  tokenSprites:
-  - {fileID: 21300000, guid: 0d674b7e903ad1b479e6604d3855bf82, type: 3}
-  - {fileID: 21300000, guid: f1d8684b2397b7349811e91245422d27, type: 3}
-  playerId: 0
-  token: {fileID: 431658533}
 --- !u!114 &431658535
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -451,6 +431,25 @@ RectTransform:
   m_AnchoredPosition: {x: -575.4979, y: -303.43256}
   m_SizeDelta: {x: 76.8245, y: 71.2164}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &431658538
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 431658533}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 54a3f6c9490b7904baf47ba0e4cfbfbf, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  currentIndex: 0
+  moveSpeed: 4
+  tokenImage: {fileID: 431658535}
+  tokenSprites:
+  - {fileID: 21300000, guid: 0d674b7e903ad1b479e6604d3855bf82, type: 3}
+  - {fileID: 21300000, guid: 0d674b7e903ad1b479e6604d3855bf82, type: 3}
+  playerId: 0
 --- !u!1 &465008688
 GameObject:
   m_ObjectHideFlags: 0
@@ -982,7 +981,6 @@ MonoBehaviour:
   - {fileID: 21300000, guid: f1d8684b2397b7349811e91245422d27, type: 3}
   - {fileID: 21300000, guid: f1d8684b2397b7349811e91245422d27, type: 3}
   playerId: 1
-  token: {fileID: 852291160}
 --- !u!1 &893257893
 GameObject:
   m_ObjectHideFlags: 0
@@ -1551,9 +1549,10 @@ MonoBehaviour:
   diceText: {fileID: 1007649100}
   tileManager: {fileID: 1893811253}
   players:
-  - {fileID: 431658534}
+  - {fileID: 431658538}
   - {fileID: 852291164}
   purchaseUI: {fileID: 106806450}
+  rollDiceButton: {fileID: 1656938401}
 --- !u!4 &1217371931
 Transform:
   m_ObjectHideFlags: 0
