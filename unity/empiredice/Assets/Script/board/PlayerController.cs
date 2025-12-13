@@ -1,18 +1,13 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.UI;
 
 public class PlayerController : MonoBehaviour
 {
     public int currentIndex = 0;
     public float moveSpeed = 0.25f;
-
-    public Image tokenImage;
-    public Sprite[] tokenSprites;
-
-    public System.Action<int, PlayerController> OnTileArrived;
     public int playerId = 0;
+
     Coroutine moveCoroutine;
 
     public void Move(int steps, List<Transform> tiles)
@@ -39,22 +34,24 @@ public class PlayerController : MonoBehaviour
                 );
                 yield return null;
             }
-                
+
             yield return new WaitForSeconds(0.1f);
         }
 
+        Debug.Log($"[ARRIVE] player {playerId} tile {currentIndex}");
+
+        // 🔥 여기서만 moveEnd 보냄
         if (playerId == GameInfo.MyPlayerId)
         {
-            Debug.Log($"[CLIENT] SendMoveEnd ▶ player:{playerId}, tile:{currentIndex}");
+            TileData data = TileManager.Instance.GetTile(currentIndex);
+
+            if (data.tileType == "territory" && !data.isOwned)
+            {
+                FindObjectOfType<TilePurchaseUI>()
+                    ?.ShowForTile(currentIndex);
+            }
+
             WSClient.Instance.SendMoveEnd(currentIndex);
         }
-
-        OnTileArrived?.Invoke(currentIndex, this);
-    }
-
-
-    public void ChangeToken(int index)
-    {
-        tokenImage.sprite = tokenSprites[index];
     }
 }

@@ -10,31 +10,59 @@ public class DiceManager : MonoBehaviour
     public TileManager tileManager;
     public PlayerController[] players;
     public TilePurchaseUI purchaseUI;
+
     public GameObject rollDiceButton;
+    public TextMeshProUGUI weaponText;
 
     int currentTurnPlayerId = -1;
+    int myWeaponCount = 0;
 
     void Awake()
     {
         Instance = this;
-    }
-
-    void Start()
-    {
-        var ui = FindObjectOfType<LobbyUI>();
-        if (ui != null)
-            ui.gameObject.SetActive(false);
-
-        players[0].playerId = 1;
-        players[1].playerId = 2;
+        Debug.Log("[DiceManager] Awake");
 
         if (rollDiceButton != null)
             rollDiceButton.SetActive(false);
 
+        ApplyBufferedTurnIfExists();
+    }
+
+    void Start()
+    {
+        Debug.Log("[DiceManager] Start");
+
+        var ui = FindObjectOfType<LobbyUI>();
+        if (ui != null) ui.gameObject.SetActive(false);
+
+        if (players != null && players.Length >= 2)
+        {
+            players[0].playerId = 1;
+            players[1].playerId = 2;
+        }
+
         StartCoroutine(SendReadyWhenConnected());
 
+        ApplyBufferedTurnIfExists();
+    }
+
+    void ApplyBufferedTurnIfExists()
+    {
+        int buffered = -1;
+
         if (WSClient.Instance != null && WSClient.Instance.PendingTurnPlayerId != -1)
-            OnTurnStart(WSClient.Instance.PendingTurnPlayerId);
+            buffered = WSClient.Instance.PendingTurnPlayerId;
+        else if (GameInfo.CurrentTurnPlayerId != -1)
+            buffered = GameInfo.CurrentTurnPlayerId;
+
+        if (buffered != -1)
+        {
+            Debug.Log("[DiceManager] ApplyBufferedTurn=" + buffered);
+            OnTurnStart(buffered);
+
+            if (WSClient.Instance != null)
+                WSClient.Instance.PendingTurnPlayerId = -1;
+        }
     }
 
     IEnumerator SendReadyWhenConnected()
@@ -55,19 +83,36 @@ public class DiceManager : MonoBehaviour
     public void OnTurnStart(int playerId)
     {
         currentTurnPlayerId = playerId;
+        GameInfo.CurrentTurnPlayerId = playerId;
+
+        Debug.Log($"[TURN] now player {playerId}");
+
         UpdateButtonState();
     }
 
+    void UpdateButtonState()
+    {
+        if (rollDiceButton == null) return;
+
+        bool active = (GameInfo.MyPlayerId == currentTurnPlayerId);
+        rollDiceButton.SetActive(active);
+    }
+
+
+
     public void OnDiceResult(int playerId, int dice)
     {
-        if (diceText != null)
-            diceText.text = dice.ToString();
+        Debug.Log($"[DiceManager] OnDiceResult playerId={playerId}, dice={dice}");
 
-        if (rollDiceButton != null)
-            rollDiceButton.SetActive(false);
+        if (diceText != null) diceText.text = dice.ToString();
+        if (rollDiceButton != null) rollDiceButton.SetActive(false);
 
         PlayerController player = GetPlayer(playerId);
-        if (player == null) return;
+        if (player == null)
+        {
+            Debug.LogError("[DiceManager] player is NULL for id=" + playerId);
+            return;
+        }
 
         player.Move(dice, tileManager.tiles);
     }
@@ -75,7 +120,7 @@ public class DiceManager : MonoBehaviour
     PlayerController GetPlayer(int id)
     {
         foreach (var p in players)
-            if (p.playerId == id)
+            if (p != null && p.playerId == id)
                 return p;
         return null;
     }
@@ -93,9 +138,15 @@ public class DiceManager : MonoBehaviour
         WSClient.Instance.SendRollDice();
     }
 
-    void UpdateButtonState()
+   
+
+    public void OnWeaponUpdate(int playerId, int count)
     {
-        if (rollDiceButton == null) return;
-        rollDiceButton.SetActive(GameInfo.MyPlayerId == currentTurnPlayerId);
+        if (playerId != GameInfo.MyPlayerId) return;
+
+        myWeaponCount = count;
+
+        if (weaponText != null)
+            weaponText.text = $"무기카드 {myWeaponCount} / 2";
     }
 }

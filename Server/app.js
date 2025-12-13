@@ -25,18 +25,17 @@ const pool = mysql.createPool({
 
 const games = new Map()
 
-wss.on("connection", (ws) => {
+// 무기 카드 타일
+const WEAPON_TILES = [2, 7, 12, 17]
 
+wss.on("connection", (ws) => {
     ws.on("message", async (raw) => {
         let msg
-        try {
-            msg = JSON.parse(raw)
-        } catch {
-            return
-        }
+        try { msg = JSON.parse(raw) } catch { return }
 
-        const type = msg.type
+        const { type } = msg
 
+        // ================= AUTH =================
         if (type === "auth") {
             try {
                 const decoded = jwt.verify(msg.token, process.env.JWT_SECRET)
@@ -48,6 +47,7 @@ wss.on("connection", (ws) => {
             return
         }
 
+        // ================= CREATE ROOM =================
         if (type === "createRoom") {
             const userId = ws.user.user_id
 
@@ -65,45 +65,39 @@ wss.on("connection", (ws) => {
             return
         }
 
+        // ================= JOIN ROOM =================
         if (type === "joinRoom") {
-            const sessionId = msg.sessionId
+            const { sessionId } = msg
             const userId = ws.user.user_id
 
             const [rows] = await pool.query(
-                "SELECT player1_id, player2_id, status FROM game_sessions WHERE session_id=?",
+                "SELECT * FROM game_sessions WHERE session_id=?",
                 [sessionId]
             )
-
-            if (rows.length === 0) {
-                ws.send(JSON.stringify({ type: "joinFail" }))
-                return
-            }
+            if (rows.length === 0) return
 
             const room = rows[0]
-            if (room.status !== "waiting" || room.player2_id) {
-                ws.send(JSON.stringify({ type: "joinFail" }))
-                return
-            }
+            if (room.status !== "waiting" || room.player2_id) return
 
             await pool.query(
-                "UPDATE game_sessions SET player2_id=?, status='ready' WHERE session_id=?",
+                "UPDATE game_sessions SET player2_id=?, status='playing' WHERE session_id=?",
                 [userId, sessionId]
             )
 
             ws.sessionId = sessionId
-
             ws.send(JSON.stringify({ type: "joinSuccess", sessionId }))
 
             wss.clients.forEach(c => {
                 if (c.readyState === WebSocket.OPEN && c.sessionId == sessionId) {
-                    c.send(JSON.stringify({ type: "gameStart", sessionId }))
+                    c.send(JSON.stringify({ type: "gameStart" }))
                 }
             })
             return
         }
 
+        // ================= GAME READY =================
         if (type === "gameReady") {
-            const sessionId = msg.sessionId
+            const { sessionId } = msg
             if (games.has(sessionId)) return
 
             const [rows] = await pool.query(
@@ -113,14 +107,14 @@ wss.on("connection", (ws) => {
             if (rows.length === 0) return
 
             const room = rows[0]
-            if (!room.player1_id || !room.player2_id) return
 
             games.set(sessionId, {
                 turn: 1,
                 players: {
                     1: { pos: 0 },
                     2: { pos: 0 }
-                }
+                },
+                territories: {}
             })
 
             wss.clients.forEach(c => {
@@ -144,46 +138,63 @@ wss.on("connection", (ws) => {
             return
         }
 
-if (type === "rollDice") {
-    const sessionId = msg.sessionId
-    const playerId = msg.playerId
-    const game = games.get(sessionId)
+        // ================= DICE =================
+        if (type === "rollDice") {
+            const { sessionId, playerId } = msg
+            const game = games.get(sessionId)
+            if (!game || game.turn !== playerId) return
 
-    if (!game || !playerId) {
-        console.log("[ROLL] invalid payload", msg)
-        return
-    }
+            const dice = Math.floor(Math.random() * 6) + 1
 
-    if (playerId !== game.turn) {
-        console.log("[ROLL] not your turn", playerId, game.turn)
-        return
-    }
-
-    const dice = Math.floor(Math.random() * 6) + 1
-    console.log("[ROLL]", playerId, dice)
-
-    wss.clients.forEach(c => {
-        if (c.readyState === WebSocket.OPEN && c.sessionId == sessionId) {
-            c.send(JSON.stringify({
-                type: "diceResult",
-                playerId,
-                dice
-            }))
+            wss.clients.forEach(c => {
+                if (c.readyState === WebSocket.OPEN && c.sessionId == sessionId) {
+                    c.send(JSON.stringify({
+                        type: "diceResult",
+                        playerId,
+                        dice
+                    }))
+                }
+            })
+            return
         }
-    })
-}
 
-
-if (type === "moveEnd") {
-    const sessionId = msg.sessionId
-    const playerId = msg.playerId
+        // ================= MOVE END =================
+      if (type === "moveEnd") {
+    const { sessionId, playerId, tileIndex } = msg
     const game = games.get(sessionId)
+    if (!game) return
 
-    if (!game || !playerId) return
+    game.players[playerId].pos = tileIndex
 
-    console.log("[MOVE END]", playerId, msg.tileIndex)
+    // 무기 카드
+    if (WEAPON_TILES.includes(tileIndex)) {
+        const column = playerId === 1 ? "player1_weapon" : "player2_weapon"
 
-    game.players[playerId].pos = msg.tileIndex
+        await pool.query(
+            `UPDATE game_sessions
+             SET ${column} = LEAST(${column} + 1, 2)
+             WHERE session_id=?`,
+            [sessionId]
+        )
+
+        const [[row]] = await pool.query(
+            "SELECT player1_weapon, player2_weapon FROM game_sessions WHERE session_id=?",
+            [sessionId]
+        )
+
+        wss.clients.forEach(c => {
+            if (c.readyState === WebSocket.OPEN && c.sessionId == sessionId) {
+                c.send(JSON.stringify({
+                    type: "weaponUpdate",
+                    playerId,
+                    weaponCount: playerId === 1
+                        ? row.player1_weapon
+                        : row.player2_weapon
+                }))
+            }
+        })
+    }
+
     game.turn = playerId === 1 ? 2 : 1
 
     wss.clients.forEach(c => {
@@ -197,9 +208,30 @@ if (type === "moveEnd") {
 }
 
 
+
+        // ================= BUY TERRITORY =================
+        if (type === "buyTerritory") {
+            const { sessionId, playerId, tileIndex } = msg
+            const game = games.get(sessionId)
+            if (!game || game.territories[tileIndex]) return
+
+            game.territories[tileIndex] = playerId
+
+            wss.clients.forEach(c => {
+                if (c.readyState === WebSocket.OPEN && c.sessionId == sessionId) {
+                    c.send(JSON.stringify({
+                        type: "territoryBought",
+                        playerId,
+                        tileIndex
+                    }))
+                }
+            })
+            return
+        }
     })
 })
 
+// ================= ROOM LIST =================
 app.get("/rooms", async (req, res) => {
     const [rows] = await pool.query(
         "SELECT session_id, player1_id, player2_id FROM game_sessions WHERE status='waiting'"
@@ -207,9 +239,7 @@ app.get("/rooms", async (req, res) => {
 
     res.json(rows.map(r => ({
         session_id: r.session_id,
-        player_count:
-            (r.player1_id ? 1 : 0) +
-            (r.player2_id ? 1 : 0)
+        player_count: (r.player1_id ? 1 : 0) + (r.player2_id ? 1 : 0)
     })))
 })
 

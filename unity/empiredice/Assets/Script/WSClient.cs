@@ -45,9 +45,9 @@ public class WSClient : MonoBehaviour
 
         ws = new WebSocket(serverUrl);
 
-        ws.OnOpen += () => Debug.Log("서버 연결 성공");
-        ws.OnError += (e) => Debug.LogError(e);
-        ws.OnClose += (e) => Debug.Log("서버 연결 종료");
+        ws.OnOpen += () => Debug.Log("[WS] connected");
+        ws.OnError += (e) => Debug.LogError("[WS] error: " + e);
+        ws.OnClose += (e) => Debug.Log("[WS] closed");
 
         ws.OnMessage += (bytes) =>
         {
@@ -80,13 +80,11 @@ public class WSClient : MonoBehaviour
                 SessionId = msg.sessionId;
                 break;
 
-            case "roomDeleted":
-                SessionId = null;
-                break;
-
             case "gameStart":
                 gameReadySent = false;
                 PendingTurnPlayerId = -1;
+                GameInfo.CurrentTurnPlayerId = -1;
+
                 UnityMainThreadDispatcher.Enqueue(() =>
                 {
                     if (LobbyUI.Instance != null)
@@ -98,19 +96,50 @@ public class WSClient : MonoBehaviour
 
             case "gameInit":
                 GameInfo.MyPlayerId = msg.playerId;
-                Debug.Log("내 플레이어 ID = " + msg.playerId);
+                Debug.Log("[WS] MyPlayerId=" + GameInfo.MyPlayerId);
                 break;
 
             case "turnStart":
+                GameInfo.CurrentTurnPlayerId = msg.playerId;
+                PendingTurnPlayerId = msg.playerId;
+
+                Debug.Log("[WS] turnStart received playerId=" + msg.playerId);
+
                 if (DiceManager.Instance != null)
+                {
                     DiceManager.Instance.OnTurnStart(msg.playerId);
+                    PendingTurnPlayerId = -1;
+                }
                 else
-                    PendingTurnPlayerId = msg.playerId;
+                {
+                    Debug.Log("[WS] DiceManager.Instance is NULL (buffering turnStart)");
+                }
                 break;
 
             case "diceResult":
                 if (DiceManager.Instance != null)
                     DiceManager.Instance.OnDiceResult(msg.playerId, msg.dice);
+                break;
+
+            case "weaponUpdate":
+                if (DiceManager.Instance != null)
+                    DiceManager.Instance.OnWeaponUpdate(msg.playerId, msg.weaponCount);
+                break;
+
+            case "territoryBought":
+                if (TileManager.Instance != null)
+                {
+                    TileData data = TileManager.Instance.GetTile(msg.tileIndex);
+                    if (data != null)
+                    {
+                        data.isOwned = true;
+                        data.ownerId = msg.playerId;
+
+                        TileManager.Instance.tiles[msg.tileIndex]
+                            .GetComponent<TileController>()
+                            .UpdateAppearance();
+                    }
+                }
                 break;
         }
     }
@@ -137,6 +166,8 @@ public class WSClient : MonoBehaviour
     {
         if (!IsConnected || string.IsNullOrEmpty(SessionId)) return;
 
+        Debug.Log("[WS] SendGameReady");
+
         await ws.SendText(JsonConvert.SerializeObject(new
         {
             type = "gameReady",
@@ -146,6 +177,8 @@ public class WSClient : MonoBehaviour
 
     public async void SendRollDice()
     {
+        if (!IsConnected) return;
+
         await ws.SendText(JsonConvert.SerializeObject(new
         {
             type = "rollDice",
@@ -165,6 +198,22 @@ public class WSClient : MonoBehaviour
         }));
     }
 
+
+
+
+
+    public async void SendBuyTerritory(int tileIndex)
+    {
+        if (!IsConnected || string.IsNullOrEmpty(SessionId)) return;
+
+        await ws.SendText(JsonConvert.SerializeObject(new
+        {
+            type = "buyTerritory",
+            sessionId = SessionId,
+            playerId = GameInfo.MyPlayerId,
+            tileIndex = tileIndex
+        }));
+    }
 
     public async void DeleteRoom()
     {
@@ -193,4 +242,6 @@ public class ServerMessage
     public string userId;
     public int playerId;
     public int dice;
+    public int weaponCount;
+    public int tileIndex;
 }

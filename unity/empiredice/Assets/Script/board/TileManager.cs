@@ -8,6 +8,7 @@ public class TileManager : MonoBehaviour
     public List<TileData> tileDatas = new List<TileData>(); // ∞¢ ¿Œµ¶Ω∫∫∞ TileData
 
 
+
     private void Awake()
     {
         Instance = this;

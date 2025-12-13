@@ -1,73 +1,55 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 
 public class TilePurchaseUI : MonoBehaviour
 {
-    [Header("Text")]
     public TextMeshProUGUI titleText;
     public TextMeshProUGUI descText;
-
-    [Header("Buttons")]
     public Button buyButton;
     public Button skipButton;
-
-    [Header("Refs")]
     public TileManager tileManager;
-    public PlayerController player;
-    public GameObject panelRoot;
 
-    int currentTileIndex;
+    int currentTileIndex = -1;
 
     void Awake()
     {
-        
-
         buyButton.onClick.AddListener(OnClickBuy);
         skipButton.onClick.AddListener(OnClickSkip);
-    }
-
-
-    public void ShowForTile(int tileIndex)
-    {
-        Debug.Log("TilePurchaseUI È£ÃâµÊ: " + tileIndex);
-
-        currentTileIndex = tileIndex;
-        TileData data = tileManager.GetTile(tileIndex);
-
-        // territory°¡ ¾Æ´Ï°Å³ª ÀÌ¹Ì ¼ÒÀ¯µÈ °æ¿ì
-        if (data == null || data.tileType != "territory" || data.isOwned)
-        {
-            Debug.Log("territory ¾Æ´Ô ¶Ç´Â ÀÌ¹Ì ±¸¸ÅµÊ ¡æ UI ¾È ¶ç¿ò");
-            return;
-        }
-
-        gameObject.SetActive(true);
-        titleText.text = "¿µÅä ±¸¸Å";
-        descText.text = $"{data.grade} ¿µÅä¸¦ ±¸¸ÅÇÏ½Ã°Ú½À´Ï±î?";
-    }
-
-
-
-    void OnClickBuy()
-    {
-        TileData data = tileManager.GetTile(currentTileIndex);
-
-        // ÇöÀç ÅÏÀÇ ÇÃ·¹ÀÌ¾î ID Àû¿ë
-        data.isOwned = true;
-        data.ownerId = player.playerId;
-
-        tileManager.tiles[currentTileIndex]
-            .GetComponent<TileController>()
-            .UpdateAppearance();
-
         gameObject.SetActive(false);
     }
 
+    public void ShowForTile(int tileIndex)
+    {
+        TileData data = tileManager.GetTile(tileIndex);
+        if (data == null) return;
+        if (data.tileType != "territory") return;
+        if (data.isOwned) return;
+        if (GameInfo.MyPlayerId != GameInfo.CurrentTurnPlayerId) return;
+
+        currentTileIndex = tileIndex;
+
+        titleText.text = "ì˜í†  êµ¬ë§¤";
+        descText.text = $"{data.grade} ì˜í† ë¥¼ êµ¬ë§¤í•˜ì‹œê² ìŠµë‹ˆê¹Œ?";
+        gameObject.SetActive(true);
+    }
+
+    void OnClickBuy()
+    {
+        if (currentTileIndex < 0) return;
+
+        WSClient.Instance.SendBuyTerritory(currentTileIndex);
+        Close();
+    }
 
     void OnClickSkip()
     {
-        Debug.Log($"Å¸ÀÏ {currentTileIndex} ±¸¸Å ½ºÅµ");
+        Close();
+    }
+
+    void Close()
+    {
+        currentTileIndex = -1;
         gameObject.SetActive(false);
     }
 }
