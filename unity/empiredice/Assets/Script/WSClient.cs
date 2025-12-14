@@ -126,6 +126,11 @@ public class WSClient : MonoBehaviour
                     DiceManager.Instance.OnWeaponUpdate(msg.playerId, msg.weaponCount);
                 break;
 
+            case "hpUpdate":
+                Debug.Log($"[WS] hpUpdate playerId={msg.playerId} hp={msg.hp}");
+                DiceManager.Instance?.OnHpUpdate(msg.playerId, msg.hp);
+                break;
+
             case "territoryBought":
                 if (TileManager.Instance != null)
                 {
@@ -244,4 +249,5 @@ public class ServerMessage
     public int dice;
     public int weaponCount;
     public int tileIndex;
+    public int hp;
 }

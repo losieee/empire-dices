@@ -1,6 +1,6 @@
 
 -- 1) 무기 테이블 초기 데이터
-INSERT INTO weapons (weapon_id, name, effect_type, value) VALUES
+INSERT INTO weapons (weapon_id, name, effect_type, VALUE) VALUES
 (1, 'sword', 'sword', 1),     -- 상대 empire_hp 1 감소
 (2, 'bow', 'bow', 3),         -- 상대 empire_hp 3 감소 
 (3, 'bomb', 'bomb', 5),       -- 상대 empire_hp 5 감소
@@ -39,3 +39,39 @@ ALTER TABLE game_sessions AUTO_INCREMENT = 1;
 
 ALTER TABLE game_sessions
 MODIFY status ENUM('waiting', 'ready', 'playing') NOT NULL;
+
+ALTER TABLE game_sessions
+ADD COLUMN player1_weapon INT DEFAULT 0,
+ADD COLUMN player2_weapon INT DEFAULT 0;
+
+ALTER TABLE game_sessions
+ADD COLUMN player1_hp INT DEFAULT 5;
+ADD COLUMN player2_hp INT DEFAULT 5;
+
+ALTER TABLE player_weapons
+  ADD UNIQUE KEY uq_player_weapon (session_id, user_id, weapon_id);
+  
+INSERT INTO weapons (weapon_id, name, effect_type, value)
+VALUES (1,'WeaponCard','card',1)
+ON DUPLICATE KEY UPDATE name=VALUES(NAME);
+
+SHOW INDEX FROM player_weapons;
+
+ALTER TABLE player_states
+  ADD UNIQUE KEY uq_player_states_session_user (session_id, user_id);
+  
+  ALTER TABLE player_weapons
+  ADD CONSTRAINT fk_player_weapons_state
+  FOREIGN KEY (session_id, user_id)
+  REFERENCES player_states (session_id, user_id)
+  ON DELETE CASCADE
+  ON UPDATE CASCADE;
+  
+  SHOW CREATE TABLE player_weapons;
+  
+  ALTER TABLE player_weapons
+  DROP FOREIGN KEY player_weapons_ibfk_1,
+  DROP FOREIGN KEY player_weapons_ibfk_2,
+  DROP FOREIGN KEY player_weapons_ibfk_3;
+  
+  SHOW INDEX FROM player_weapons;

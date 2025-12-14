@@ -13,6 +13,14 @@ public class DiceManager : MonoBehaviour
 
     public GameObject rollDiceButton;
     public TextMeshProUGUI weaponText;
+    public TextMeshProUGUI p1HpText;
+    public TextMeshProUGUI p2HpText;
+
+    public void OnHpUpdate(int playerId, int hp)
+    {
+        if (playerId == 1 && p1HpText != null) p1HpText.text = hp.ToString();
+        if (playerId == 2 && p2HpText != null) p2HpText.text = hp.ToString();
+    }
 
     int currentTurnPlayerId = -1;
     int myWeaponCount = 0;
