@@ -52,8 +52,8 @@ public class DiceManager : MonoBehaviour
 
     void Start()
     {
-        var ui = FindObjectOfType<LobbyUI>();
-        if (ui != null) ui.gameObject.SetActive(false);
+        //var ui = FindObjectOfType<LobbyUI>();
+        //if (ui != null) ui.gameObject.SetActive(false);
 
         if (players != null && players.Length >= 2)
         {
@@ -62,8 +62,11 @@ public class DiceManager : MonoBehaviour
         }
 
         StartCoroutine(SendReadyWhenConnected());
-
         ApplyBufferedTurnIfExists();
+
+        var lobby = FindObjectOfType<LobbyUI>(true); 
+        if (lobby != null)
+            lobby.gameObject.SetActive(false);
     }
 
     void ApplyBufferedTurnIfExists()
@@ -108,6 +111,46 @@ public class DiceManager : MonoBehaviour
         currentTurnPlayerId = playerId;
         GameInfo.CurrentTurnPlayerId = playerId;
         UpdateButtonState();
+    }
+
+    public void OnTurnSkipped(int skippedPlayerId)
+    {
+        if (isGameOver) return;
+        if (battleResultText == null) return;
+
+        if (battleTextCo != null)
+            StopCoroutine(battleTextCo);
+
+        battleTextCo = StartCoroutine(TempTextRoutine($"Player {skippedPlayerId} 1턴 쉬기!", 1.0f));
+    }
+
+    public void OnSpecialResult(string effect, int targetPlayerId, bool success, int fromPlayerId, int toPlayerId)
+    {
+        if (isGameOver) return;
+        if (battleResultText == null) return;
+
+        string txt = "";
+        if (effect == "island") txt = $"Player {targetPlayerId} 1턴 쉬기!";
+        else if (effect == "silence") txt = $"Player {targetPlayerId} 1턴 쉬기!";
+        else if (effect == "steal") txt = success ? $"Player {toPlayerId} 강탈 성공!" : $"강탈 실패!";
+
+        if (string.IsNullOrEmpty(txt)) return;
+
+        if (battleTextCo != null)
+            StopCoroutine(battleTextCo);
+
+        battleTextCo = StartCoroutine(TempTextRoutine(txt, 1.2f));
+    }
+
+    IEnumerator TempTextRoutine(string text, float sec)
+    {
+        battleResultText.text = text;
+        battleResultText.gameObject.SetActive(true);
+
+        yield return new WaitForSeconds(sec);
+
+        if (!isGameOver)
+            battleResultText.gameObject.SetActive(false);
     }
 
     void UpdateButtonState()
@@ -220,14 +263,36 @@ public class DiceManager : MonoBehaviour
 
     public void GoToRoomList()
     {
+        Time.timeScale = 1f;
+        AudioListener.pause = false;
+
         if (WSClient.Instance != null)
         {
             WSClient.Instance.gameReadySent = false;
             WSClient.Instance.PendingTurnPlayerId = -1;
-            WSClient.Instance.PendingGameOverWinnerId = -1;
             GameInfo.CurrentTurnPlayerId = -1;
+
+            
+            WSClient.Instance.ReturnToRoomListOnLobbyLoad = true;
         }
 
         SceneManager.LoadScene("MainLobby");
     }
+
+
+
+
+    IEnumerator ShowLobbyAfterLoad()
+    {
+        yield return null; 
+
+        
+        var lobby = LobbyUI.Instance != null ? LobbyUI.Instance : FindObjectOfType<LobbyUI>(true);
+        if (lobby != null)
+        {
+            lobby.gameObject.SetActive(true);
+            lobby.ShowRoomList();  
+        }
+    }
+
 }

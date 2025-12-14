@@ -12,6 +12,8 @@ public class PlayerController : MonoBehaviour
 
     public void Move(int steps, List<Transform> tiles)
     {
+        if (tiles == null || tiles.Count == 0) return;
+
         if (moveCoroutine != null)
             StopCoroutine(moveCoroutine);
 
@@ -23,7 +25,10 @@ public class PlayerController : MonoBehaviour
         for (int i = 0; i < steps; i++)
         {
             currentIndex = (currentIndex + 1) % tiles.Count;
-            Vector3 target = tiles[currentIndex].position;
+            Transform t = tiles[currentIndex];
+            if (t == null) yield break;
+
+            Vector3 target = t.position;
 
             while (Vector3.Distance(transform.position, target) > 0.05f)
             {
@@ -38,16 +43,14 @@ public class PlayerController : MonoBehaviour
             yield return new WaitForSeconds(0.1f);
         }
 
-        Debug.Log($"[ARRIVE] player {playerId} tile {currentIndex}");
-
-        // 🔥 여기서만 moveEnd 보냄
         if (playerId == GameInfo.MyPlayerId)
         {
-            TileData data = TileManager.Instance.GetTile(currentIndex);
+            TileData data = TileManager.Instance != null ? TileManager.Instance.GetTile(currentIndex) : null;
 
-            if (data.tileType == "territory" && !data.isOwned)
+            if (data != null && data.tileType == "territory" && !data.isOwned)
             {
-                DiceManager.Instance.purchaseUI.ShowForTile(currentIndex);
+                if (DiceManager.Instance != null && DiceManager.Instance.purchaseUI != null)
+                    DiceManager.Instance.purchaseUI.ShowForTile(currentIndex);
             }
 
             WSClient.Instance.SendMoveEnd(currentIndex);

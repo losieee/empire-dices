@@ -3,6 +3,9 @@ using Newtonsoft.Json;
 using System;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using System.Collections;
+
+
 
 public class WSClient : MonoBehaviour
 {
@@ -20,15 +23,27 @@ public class WSClient : MonoBehaviour
     public int PendingTurnPlayerId = -1;
     public int PendingGameOverWinnerId = -1;
 
+    public bool OpenRoomListOnLobby = false;
+    [NonSerialized] public bool ReturnToRoomListOnLobbyLoad = false;
+
+
+
+
     void Awake()
     {
         if (Instance == null)
         {
             Instance = this;
             DontDestroyOnLoad(gameObject);
+
+           
+            ReturnToRoomListOnLobbyLoad = false;
+            PendingGameOverWinnerId = -1;
+            PendingTurnPlayerId = -1;
         }
         else Destroy(gameObject);
     }
+
 
     void Update()
     {
@@ -92,19 +107,12 @@ public class WSClient : MonoBehaviour
 
             case "gameInit":
                 GameInfo.MyPlayerId = msg.playerId;
+                if (DiceManager.Instance != null && GameInfo.CurrentTurnPlayerId != -1)
+                    DiceManager.Instance.OnTurnStart(GameInfo.CurrentTurnPlayerId);
+                break;
 
-                if (DiceManager.Instance != null)
-                {
-                    if (PendingGameOverWinnerId != -1)
-                    {
-                        DiceManager.Instance.OnGameOver(PendingGameOverWinnerId);
-                        PendingGameOverWinnerId = -1;
-                    }
-                    else if (GameInfo.CurrentTurnPlayerId != -1)
-                    {
-                        DiceManager.Instance.OnTurnStart(GameInfo.CurrentTurnPlayerId);
-                    }
-                }
+            case "turnSkipped":
+                DiceManager.Instance?.OnTurnSkipped(msg.playerId);
                 break;
 
             case "turnStart":
@@ -134,15 +142,13 @@ public class WSClient : MonoBehaviour
                 DiceManager.Instance?.ShowBattleWinner(msg.winnerId);
                 break;
 
+            case "specialResult":
+                DiceManager.Instance?.OnSpecialResult(msg.effect, msg.targetPlayerId, msg.success, msg.fromPlayerId, msg.toPlayerId);
+                break;
+
             case "gameOver":
-                if (DiceManager.Instance != null)
-                {
-                    DiceManager.Instance.OnGameOver(msg.winnerId);
-                }
-                else
-                {
-                    PendingGameOverWinnerId = msg.winnerId;
-                }
+                if (DiceManager.Instance != null) DiceManager.Instance.OnGameOver(msg.winnerId);
+                else PendingGameOverWinnerId = msg.winnerId;
                 break;
 
             case "territoryBought":
@@ -246,6 +252,53 @@ public class WSClient : MonoBehaviour
     {
         SessionId = null;
     }
+
+    void OnEnable()
+    {
+        SceneManager.sceneLoaded += OnSceneLoaded;
+    }
+
+    void OnDisable()
+    {
+        SceneManager.sceneLoaded -= OnSceneLoaded;
+    }
+
+    void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        if (scene.name == "MainLobby" && ReturnToRoomListOnLobbyLoad)
+        {
+            StartCoroutine(ShowRoomListNextFrame());
+        }
+    }
+
+    IEnumerator ShowRoomListNextFrame()
+    {
+        yield return null;
+
+        Time.timeScale = 1f;
+        AudioListener.pause = false;
+
+        
+        ReturnToRoomListOnLobbyLoad = false;
+
+        LobbyUI lobby = LobbyUI.Instance;
+        if (lobby == null) lobby = FindObjectOfType<LobbyUI>(true);
+
+        if (lobby == null)
+        {
+            Debug.LogError("[WSClient] LobbyUI not found in MainLobby!");
+            yield break;
+        }
+
+        
+        lobby.gameObject.SetActive(true);
+
+        
+        lobby.ShowRoomList();
+    }
+
+
+
 }
 
 [Serializable]
@@ -260,4 +313,10 @@ public class ServerMessage
     public int tileIndex;
     public int hp;
     public int winnerId;
+
+    public string effect;
+    public int targetPlayerId;
+    public bool success;
+    public int fromPlayerId;
+    public int toPlayerId;
 }

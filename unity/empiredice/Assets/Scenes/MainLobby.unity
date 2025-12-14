@@ -2566,6 +2566,7 @@ MonoBehaviour:
   UserId: 
   gameReadySent: 0
   PendingTurnPlayerId: -1
+  PendingGameOverWinnerId: -1
 --- !u!4 &685135919
 Transform:
   m_ObjectHideFlags: 0
