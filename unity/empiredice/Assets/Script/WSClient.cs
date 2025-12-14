@@ -18,6 +18,7 @@ public class WSClient : MonoBehaviour
     public bool gameReadySent = false;
 
     public int PendingTurnPlayerId = -1;
+    public int PendingGameOverWinnerId = -1;
 
     void Awake()
     {
@@ -26,10 +27,7 @@ public class WSClient : MonoBehaviour
             Instance = this;
             DontDestroyOnLoad(gameObject);
         }
-        else
-        {
-            Destroy(gameObject);
-        }
+        else Destroy(gameObject);
     }
 
     void Update()
@@ -52,7 +50,7 @@ public class WSClient : MonoBehaviour
         ws.OnMessage += (bytes) =>
         {
             string json = System.Text.Encoding.UTF8.GetString(bytes);
-            HandleMessage(json);
+            UnityMainThreadDispatcher.Enqueue(() => HandleMessage(json));
         };
 
         await ws.Connect();
@@ -83,52 +81,68 @@ public class WSClient : MonoBehaviour
             case "gameStart":
                 gameReadySent = false;
                 PendingTurnPlayerId = -1;
+                PendingGameOverWinnerId = -1;
                 GameInfo.CurrentTurnPlayerId = -1;
 
-                UnityMainThreadDispatcher.Enqueue(() =>
-                {
-                    if (LobbyUI.Instance != null)
-                        LobbyUI.Instance.HideWaitingRoom();
+                if (LobbyUI.Instance != null)
+                    LobbyUI.Instance.HideWaitingRoom();
 
-                    SceneManager.LoadScene("dice");
-                });
+                SceneManager.LoadScene("dice");
                 break;
 
             case "gameInit":
                 GameInfo.MyPlayerId = msg.playerId;
-                Debug.Log("[WS] MyPlayerId=" + GameInfo.MyPlayerId);
+
+                if (DiceManager.Instance != null)
+                {
+                    if (PendingGameOverWinnerId != -1)
+                    {
+                        DiceManager.Instance.OnGameOver(PendingGameOverWinnerId);
+                        PendingGameOverWinnerId = -1;
+                    }
+                    else if (GameInfo.CurrentTurnPlayerId != -1)
+                    {
+                        DiceManager.Instance.OnTurnStart(GameInfo.CurrentTurnPlayerId);
+                    }
+                }
                 break;
 
             case "turnStart":
                 GameInfo.CurrentTurnPlayerId = msg.playerId;
                 PendingTurnPlayerId = msg.playerId;
 
-                Debug.Log("[WS] turnStart received playerId=" + msg.playerId);
-
                 if (DiceManager.Instance != null)
                 {
                     DiceManager.Instance.OnTurnStart(msg.playerId);
                     PendingTurnPlayerId = -1;
                 }
-                else
-                {
-                    Debug.Log("[WS] DiceManager.Instance is NULL (buffering turnStart)");
-                }
                 break;
 
             case "diceResult":
-                if (DiceManager.Instance != null)
-                    DiceManager.Instance.OnDiceResult(msg.playerId, msg.dice);
+                DiceManager.Instance?.OnDiceResult(msg.playerId, msg.dice);
                 break;
 
             case "weaponUpdate":
-                if (DiceManager.Instance != null)
-                    DiceManager.Instance.OnWeaponUpdate(msg.playerId, msg.weaponCount);
+                DiceManager.Instance?.OnWeaponUpdate(msg.playerId, msg.weaponCount);
                 break;
 
             case "hpUpdate":
-                Debug.Log($"[WS] hpUpdate playerId={msg.playerId} hp={msg.hp}");
                 DiceManager.Instance?.OnHpUpdate(msg.playerId, msg.hp);
+                break;
+
+            case "battleResult":
+                DiceManager.Instance?.ShowBattleWinner(msg.winnerId);
+                break;
+
+            case "gameOver":
+                if (DiceManager.Instance != null)
+                {
+                    DiceManager.Instance.OnGameOver(msg.winnerId);
+                }
+                else
+                {
+                    PendingGameOverWinnerId = msg.winnerId;
+                }
                 break;
 
             case "territoryBought":
@@ -140,9 +154,8 @@ public class WSClient : MonoBehaviour
                         data.isOwned = true;
                         data.ownerId = msg.playerId;
 
-                        TileManager.Instance.tiles[msg.tileIndex]
-                            .GetComponent<TileController>()
-                            .UpdateAppearance();
+                        var tc = TileManager.Instance.tiles[msg.tileIndex].GetComponent<TileController>();
+                        if (tc != null) tc.UpdateAppearance();
                     }
                 }
                 break;
@@ -171,8 +184,6 @@ public class WSClient : MonoBehaviour
     {
         if (!IsConnected || string.IsNullOrEmpty(SessionId)) return;
 
-        Debug.Log("[WS] SendGameReady");
-
         await ws.SendText(JsonConvert.SerializeObject(new
         {
             type = "gameReady",
@@ -182,7 +193,7 @@ public class WSClient : MonoBehaviour
 
     public async void SendRollDice()
     {
-        if (!IsConnected) return;
+        if (!IsConnected || string.IsNullOrEmpty(SessionId)) return;
 
         await ws.SendText(JsonConvert.SerializeObject(new
         {
@@ -194,6 +205,8 @@ public class WSClient : MonoBehaviour
 
     public async void SendMoveEnd(int tileIndex)
     {
+        if (!IsConnected || string.IsNullOrEmpty(SessionId)) return;
+
         await ws.SendText(JsonConvert.SerializeObject(new
         {
             type = "moveEnd",
@@ -202,10 +215,6 @@ public class WSClient : MonoBehaviour
             tileIndex
         }));
     }
-
-
-
-
 
     public async void SendBuyTerritory(int tileIndex)
     {
@@ -250,4 +259,5 @@ public class ServerMessage
     public int weaponCount;
     public int tileIndex;
     public int hp;
+    public int winnerId;
 }

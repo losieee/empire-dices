@@ -23,10 +23,8 @@ const pool = mysql.createPool({
   database: "empiredice",
 });
 
-// in-memory
 const games = new Map();
 
-// Unity 보드 기준 무기칸 인덱스
 const WEAPON_TILES = [3, 8, 13, 18];
 const WEAPON_ID = 1;
 
@@ -37,9 +35,7 @@ function send(ws, obj) {
 function broadcast(sessionId, obj) {
   const msg = JSON.stringify(obj);
   wss.clients.forEach((c) => {
-    if (c.readyState === WebSocket.OPEN && c.sessionId == sessionId) {
-      c.send(msg);
-    }
+    if (c.readyState === WebSocket.OPEN && c.sessionId == sessionId) c.send(msg);
   });
 }
 
@@ -58,6 +54,100 @@ async function ensurePlayerUserIds(game, sessionId) {
   };
 }
 
+async function getWeaponCount(sessionId, userId) {
+  const [rows] = await pool.query(
+    "SELECT count FROM player_weapons WHERE session_id=? AND user_id=? AND weapon_id=?",
+    [sessionId, userId, WEAPON_ID]
+  );
+  if (!rows || rows.length === 0) return 0;
+  return rows[0].count ?? 0;
+}
+
+async function setWeaponCount(sessionId, userId, count) {
+  if (count <= 0) {
+    await pool.query(
+      "DELETE FROM player_weapons WHERE session_id=? AND user_id=? AND weapon_id=?",
+      [sessionId, userId, WEAPON_ID]
+    );
+    return 0;
+  }
+
+  await pool.query(
+    `INSERT INTO player_weapons (session_id, user_id, weapon_id, count)
+     VALUES (?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE count=?`,
+    [sessionId, userId, WEAPON_ID, count, count]
+  );
+  return count;
+}
+
+async function syncSessionWeapon(sessionId, playerId, weaponCount) {
+  const col = playerId === 1 ? "player1_weapon" : "player2_weapon";
+  await pool.query(`UPDATE game_sessions SET ${col}=? WHERE session_id=?`, [
+    weaponCount,
+    sessionId,
+  ]);
+}
+
+async function decHp(sessionId, playerId, amount) {
+  const col = playerId === 1 ? "player1_hp" : "player2_hp";
+
+  await pool.query(
+    `UPDATE game_sessions SET ${col} = GREATEST(${col} - ?, 0) WHERE session_id=?`,
+    [amount, sessionId]
+  );
+
+  const [rows] = await pool.query(
+    `SELECT player1_hp, player2_hp FROM game_sessions WHERE session_id=?`,
+    [sessionId]
+  );
+  if (!rows || rows.length === 0) return null;
+  return playerId === 1 ? rows[0].player1_hp : rows[0].player2_hp;
+}
+
+async function getSessionRow(sessionId) {
+  const [rows] = await pool.query(
+    "SELECT session_id, status, winner_id, player1_id, player2_id, player1_hp, player2_hp FROM game_sessions WHERE session_id=?",
+    [sessionId]
+  );
+  return rows[0] || null;
+}
+
+async function endGameIfNeeded(sessionId, game) {
+  const row = await getSessionRow(sessionId);
+  if (!row) return false;
+
+  if (row.winner_id != null) {
+    if (game) game.ended = true;
+    return true;
+  }
+
+  const p1hp = Number(row.player1_hp ?? 0);
+  const p2hp = Number(row.player2_hp ?? 0);
+
+  if (p1hp > 0 && p2hp > 0) return false;
+
+  const winnerId = p1hp <= 0 ? 2 : 1;
+  const winnerUserId = winnerId === 1 ? row.player1_id : row.player2_id;
+
+  try {
+    await pool.query(
+      "UPDATE game_sessions SET winner_id=?, status='finished' WHERE session_id=?",
+      [winnerUserId, sessionId]
+    );
+  } catch {
+    await pool.query(
+      "UPDATE game_sessions SET winner_id=? WHERE session_id=?",
+      [winnerUserId, sessionId]
+    );
+  }
+
+  if (game) game.ended = true;
+
+  broadcast(sessionId, { type: "gameOver", winnerId });
+  return true;
+}
+
 wss.on("connection", (ws) => {
   ws.on("message", async (raw) => {
     try {
@@ -70,25 +160,22 @@ wss.on("connection", (ws) => {
 
       const { type } = msg;
 
-      // auth 이전 메시지 방지
       if (type !== "auth" && !ws.user) {
         send(ws, { type: "need_auth" });
         return;
       }
 
-      // ================= AUTH =================
       if (type === "auth") {
         try {
           const decoded = jwt.verify(msg.token, process.env.JWT_SECRET);
           ws.user = decoded;
           send(ws, { type: "auth_ok", userId: decoded.user_id });
-        } catch (e) {
+        } catch {
           send(ws, { type: "auth_fail" });
         }
         return;
       }
 
-      // ================= CREATE ROOM =================
       if (type === "createRoom") {
         const userId = ws.user.user_id;
 
@@ -102,7 +189,6 @@ wss.on("connection", (ws) => {
         return;
       }
 
-      // ================= JOIN ROOM =================
       if (type === "joinRoom") {
         const { sessionId } = msg;
         const userId = ws.user.user_id;
@@ -116,7 +202,6 @@ wss.on("connection", (ws) => {
         const room = rows[0];
         if (room.status !== "waiting" || room.player2_id) return;
 
-        // ✅ enum에 맞게 in_progress
         await pool.query(
           "UPDATE game_sessions SET player2_id=?, status='in_progress' WHERE session_id=?",
           [userId, sessionId]
@@ -125,32 +210,26 @@ wss.on("connection", (ws) => {
         ws.sessionId = sessionId.toString();
         send(ws, { type: "joinSuccess", sessionId });
 
-        // 방에 있는 클라들에게 gameStart
         broadcast(sessionId, { type: "gameStart" });
         return;
       }
 
-      // ================= DELETE ROOM (대기방 취소) =================
       if (type === "deleteRoom") {
         const { sessionId } = msg;
         if (!sessionId) return;
 
-        // 방장이면 waiting 방 삭제(간단 처리)
         await pool.query(
           "DELETE FROM game_sessions WHERE session_id=? AND status='waiting'",
           [sessionId]
         );
 
-        // 세션 소켓들 정리용 메시지(원하면 클라에서 처리)
         broadcast(sessionId, { type: "roomDeleted", sessionId });
         return;
       }
 
-      // ================= GAME READY =================
       if (type === "gameReady") {
         const { sessionId } = msg;
         if (!sessionId) return;
-
         if (games.has(sessionId)) return;
 
         const [rows] = await pool.query(
@@ -163,20 +242,19 @@ wss.on("connection", (ws) => {
 
         await pool.query(
           `INSERT INTO player_states (session_id, user_id)
-          VALUES (?, ?), (?, ?)
-          ON DUPLICATE KEY UPDATE session_id=session_id`,
+           VALUES (?, ?), (?, ?)
+           ON DUPLICATE KEY UPDATE session_id=session_id`,
           [sessionId, room.player1_id, sessionId, room.player2_id]
         );
 
-        // 인메모리 게임 생성 + playerUserIds 보장
         games.set(sessionId, {
           turn: 1,
           players: { 1: { pos: 0 }, 2: { pos: 0 } },
           territories: {},
           playerUserIds: { 1: room.player1_id, 2: room.player2_id },
+          ended: false,
         });
 
-        // 각 클라에 playerId 설정 + gameInit
         wss.clients.forEach((c) => {
           if (c.readyState === WebSocket.OPEN && c.sessionId == sessionId) {
             c.playerId = c.user.user_id === room.player1_id ? 1 : 2;
@@ -184,46 +262,58 @@ wss.on("connection", (ws) => {
           }
         });
 
-        // ✅ 게임 시작 즉시 HP 브로드캐스트 (그래야 Unity hpUpdate 로그가 뜸)
-        // DB에 hp 컬럼이 없으면 여기서 에러 -> 콘솔 확인
         const p1hp = room.player1_hp ?? 5;
         const p2hp = room.player2_hp ?? 5;
         broadcast(sessionId, { type: "hpUpdate", playerId: 1, hp: p1hp });
         broadcast(sessionId, { type: "hpUpdate", playerId: 2, hp: p2hp });
 
-        // 턴 시작
+        await endGameIfNeeded(sessionId, games.get(sessionId));
+
+        const game = games.get(sessionId);
+        if (!game || game.ended) return;
+
         broadcast(sessionId, { type: "turnStart", playerId: 1 });
         return;
       }
 
-      // ================= DICE =================
       if (type === "rollDice") {
         const { sessionId, playerId } = msg;
         const game = games.get(sessionId);
-        if (!game || game.turn !== playerId) return;
+        if (!game || game.ended) return;
+        if (game.turn !== playerId) return;
+
+        const row = await getSessionRow(sessionId);
+        if (!row) return;
+        if (row.winner_id != null) {
+          game.ended = true;
+          return;
+        }
 
         const dice = Math.floor(Math.random() * 6) + 1;
         broadcast(sessionId, { type: "diceResult", playerId, dice });
         return;
       }
 
-      // ================= MOVE END =================
       if (type === "moveEnd") {
         const { sessionId, playerId, tileIndex } = msg;
         const game = games.get(sessionId);
-        if (!game) return;
+        if (!game || game.ended) return;
 
-        // ✅ playerUserIds 없으면 복구
+        const row0 = await getSessionRow(sessionId);
+        if (!row0) return;
+        if (row0.winner_id != null) {
+          game.ended = true;
+          return;
+        }
+
         await ensurePlayerUserIds(game, sessionId);
 
         game.players[playerId].pos = tileIndex;
 
-        // ---- 무기칸이면 무기카드 +1 (DB UPSERT) + weaponUpdate 브로드캐스트
         if (WEAPON_TILES.includes(tileIndex)) {
           try {
             const userId = game.playerUserIds[playerId];
 
-            // ✅ 이게 동작하려면 (session_id,user_id,weapon_id) 유니크키가 필요
             await pool.query(
               `INSERT INTO player_weapons (session_id, user_id, weapon_id, count)
                VALUES (?, ?, ?, 1)
@@ -231,31 +321,80 @@ wss.on("connection", (ws) => {
               [sessionId, userId, WEAPON_ID]
             );
 
-            const [[row]] = await pool.query(
-              `SELECT count FROM player_weapons
-               WHERE session_id=? AND user_id=? AND weapon_id=?`,
-              [sessionId, userId, WEAPON_ID]
-            );
+            const weaponCount = await getWeaponCount(sessionId, userId);
+            await syncSessionWeapon(sessionId, playerId, weaponCount);
 
-            const weaponCount = row?.count ?? 0;
             broadcast(sessionId, { type: "weaponUpdate", playerId, weaponCount });
           } catch (err) {
             console.error("[MOVEEND] weapon gain failed:", err.message);
           }
         }
 
-        // 턴 교대
+        const ownerId = game.territories[tileIndex];
+        if (ownerId && ownerId !== playerId) {
+          const attackerId = playerId;
+          const defenderId = ownerId;
+          const attackerUserId = game.playerUserIds[attackerId];
+
+          let attackerWeapon = 0;
+          try {
+            attackerWeapon = await getWeaponCount(sessionId, attackerUserId);
+          } catch {
+            attackerWeapon = 0;
+          }
+
+          if (attackerWeapon >= 1) {
+            const newCount = await setWeaponCount(
+              sessionId,
+              attackerUserId,
+              attackerWeapon - 1
+            );
+            await syncSessionWeapon(sessionId, attackerId, newCount);
+
+            broadcast(sessionId, {
+              type: "weaponUpdate",
+              playerId: attackerId,
+              weaponCount: newCount,
+            });
+
+            const newHp = await decHp(sessionId, defenderId, 1);
+            if (newHp !== null) {
+              broadcast(sessionId, { type: "hpUpdate", playerId: defenderId, hp: newHp });
+            }
+
+            broadcast(sessionId, { type: "battleResult", winnerId: attackerId });
+          } else {
+            const newHp = await decHp(sessionId, attackerId, 1);
+            if (newHp !== null) {
+              broadcast(sessionId, { type: "hpUpdate", playerId: attackerId, hp: newHp });
+            }
+
+            broadcast(sessionId, { type: "battleResult", winnerId: defenderId });
+          }
+
+          const ended = await endGameIfNeeded(sessionId, game);
+          if (ended) return;
+        } else {
+          const ended = await endGameIfNeeded(sessionId, game);
+          if (ended) return;
+        }
+
         game.turn = playerId === 1 ? 2 : 1;
         broadcast(sessionId, { type: "turnStart", playerId: game.turn });
-
         return;
       }
 
-      // ================= BUY TERRITORY =================
       if (type === "buyTerritory") {
         const { sessionId, playerId, tileIndex } = msg;
         const game = games.get(sessionId);
-        if (!game) return;
+        if (!game || game.ended) return;
+
+        const row = await getSessionRow(sessionId);
+        if (!row) return;
+        if (row.winner_id != null) {
+          game.ended = true;
+          return;
+        }
 
         if (game.territories[tileIndex]) return;
         game.territories[tileIndex] = playerId;
@@ -269,7 +408,6 @@ wss.on("connection", (ws) => {
   });
 });
 
-// ================= ROOM LIST =================
 app.get("/rooms", async (req, res) => {
   const [rows] = await pool.query(
     "SELECT session_id, player1_id, player2_id FROM game_sessions WHERE status='waiting'"
